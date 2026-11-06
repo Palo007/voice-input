@@ -37,6 +37,18 @@ fun modelFamiliesForDisplay(): Map<String, List<RecognitionModelCard>> =
         }
     }
 
+/**
+ * Moves models already on the device to the top of a family: cards with an installed
+ * model come first, and installed models lead within each card. Otherwise keeps the
+ * catalog order (both sorts are stable).
+ */
+fun downloadedFirst(
+    cards: List<RecognitionModelCard>,
+    isInstalled: (RecognitionModel) -> Boolean
+): List<RecognitionModelCard> = cards
+    .map { card -> card.copy(models = card.models.sortedBy { if (isInstalled(it)) 0 else 1 }) }
+    .sortedBy { card -> if (card.models.any(isInstalled)) 0 else 1 }
+
 fun modelCardsForDisplay(): List<RecognitionModelCard> = RecognitionModelCatalog.cards
     .sortedWith(compareBy<RecognitionModelCard> { it.transcription.ordinal }.thenBy { card ->
         if (card.models.isEmpty()) {

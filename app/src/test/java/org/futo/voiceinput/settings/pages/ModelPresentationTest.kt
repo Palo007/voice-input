@@ -11,6 +11,24 @@ import org.junit.Test
 
 class ModelPresentationTest {
     @Test
+    fun downloadedModelsLeadTheirFamilyWithoutDroppingAny() {
+        val parakeet = modelFamiliesForDisplay().getValue("Parakeet")
+        val lastCard = parakeet.last { it.models.isNotEmpty() }
+        val installed = setOf(lastCard.models.last().id)
+        val ordered = downloadedFirst(parakeet) { it.id in installed }
+
+        assertEquals(lastCard.id, ordered.first().id)
+        assertEquals(installed.single(), ordered.first().models.first().id)
+        assertEquals(parakeet.map { it.id }.toSet(), ordered.map { it.id }.toSet())
+        assertEquals(
+            parakeet.flatMap { it.models }.map { it.id }.sorted(),
+            ordered.flatMap { it.models }.map { it.id }.sorted()
+        )
+        // Nothing installed: catalog order is unchanged.
+        assertEquals(parakeet, downloadedFirst(parakeet) { false })
+    }
+
+    @Test
     fun familiesKeepEveryModelAndCombineParakeetAndNemotronVariants() {
         val families = modelFamiliesForDisplay()
         assertEquals(

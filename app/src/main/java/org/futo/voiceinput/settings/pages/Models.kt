@@ -165,8 +165,9 @@ fun ManagedRecognitionModelCatalog() {
         MULTILINGUAL_MODELS[multilingualIndex], multilingualEnabled
     )
 
-    modelFamiliesForDisplay().forEach { (family, cards) ->
+    modelFamiliesForDisplay().forEach { (family, catalogCards) ->
         key(family) {
+            val cards = downloadedFirst(catalogCards, modelLifecycle::isReady)
             val selected = cards.any { card ->
                 card.models.any { it.id == selectedModelId } ||
                     (card.id == "whisper" && backend == card.runtimeId)
@@ -199,7 +200,7 @@ fun ManagedRecognitionModelCatalog() {
                     WhisperModelOptions(whisperSelected = selected)
                 } else {
                     card.models.forEach { model ->
-                        ManagedRecognitionModelItem(model, selectedModelId, modelLifecycle)
+                        key(model.id) { ManagedRecognitionModelItem(model, selectedModelId, modelLifecycle) }
                     }
                     card.models.firstOrNull { it.id == selectedModelId }?.let {
                         RecognitionModelLanguageOptions(it, showGuidance = false)
@@ -326,7 +327,11 @@ fun WhisperModelRadio(
 
     Text(title, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         style = MaterialTheme.typography.labelLarge)
-    models.forEachIndexed { index, model ->
+    refresh.value
+    // Downloaded models first; keep the original index, which is what the setting stores.
+    val ordered = models.withIndex()
+        .sortedBy { (_, model) -> if (context.modelNeedsDownloading(model)) 1 else 0 }
+    ordered.forEach { (index, model) -> key(model.ggml.ggml_file) {
         val needsDownload = context.modelNeedsDownloading(model)
         val presentation = presentWhisperModel(
             model = model,
@@ -353,7 +358,7 @@ fun WhisperModelRadio(
         if (showDetails.value) {
             ModelDetailsDialog(presentation) { showDetails.value = false }
         }
-    }
+    } }
 }
 
 @Composable
