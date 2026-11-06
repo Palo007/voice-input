@@ -99,6 +99,7 @@ Generated APK names are customized in `app/build.gradle`. Debug output is under 
 - Before branch setup, integration, promotion or cleanup, read [the Git workflow](docs/development.md#git-workflow).
 - Prefer existing Compose/settings patterns in `settings/Components.kt`, `settings/Hooks.kt`, and `settings/pages/*`.
 - Keep backend-agnostic recognition behavior in `AudioRecognizer` or `RecognizerView`; keep Parakeet specifics in `parakeet/*`.
+- When dictation returns no text ("nothing detected") or much worse text than expected, follow [recognition troubleshooting](docs/recognition-troubleshooting.md) first: input level and spoken language explained past cases, and it describes the on-phone replay bench.
 - Check each recognition model's declared `TranscriptionBehavior` before changing live or final-only transcription; Parakeet variants differ. See [the NVIDIA runtime decision](docs/adr/0001-use-sherpa-onnx-for-nvidia-streaming.md).
 - Before changing logging, transcript capture, or export, read [the vocabulary and capture boundary](CONTEXT.md), [diagnostics design and known gaps](docs/diagnostics.md), and [ADR 0003](docs/adr/0003-local-content-free-app-diagnostics.md). Keep dictated content out of standard diagnostics and Logcat; transcript capture remains a separate explicit option. Preserve separate audio-history retention.
 - `ParakeetEngineManager` keeps Parakeet warm by default via `PARAKEET_KEEP_WARM`; force-close it before deleting/replacing model files.
