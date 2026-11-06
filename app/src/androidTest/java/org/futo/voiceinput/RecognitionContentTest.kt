@@ -70,6 +70,49 @@ class RecognitionContentTest {
         compose.runOnIdle { assertEquals(1, canceled); assertEquals(1, stopped) }
     }
 
+    @Test fun dictationLanguageButtonSwitchesWithoutStoppingAndHidesAfterStop() {
+        val state = mutableStateOf(RecognitionUiState().start("Parakeet Ultra").recording())
+        val language = mutableStateOf(org.futo.voiceinput.recognition.DictationLanguage.English)
+        var stopped = 0
+        compose.setContent {
+            MaterialTheme {
+                RecognizerInputMethodWindow(switchBack = { }, allowClick = state.value.isRecording,
+                    onFinish = { stopped++ }) {
+                    RecognitionContent(state.value, compact = true, onFinish = { stopped++ },
+                        dictationLanguage = language.value, onDictationLanguage = { language.value = it })
+                }
+            }
+        }
+        val sk = compose.onNodeWithContentDescription(compose.activity.getString(R.string.dictation_language_sk_description),
+            useUnmergedTree = true)
+        sk.assertIsDisplayed().assertIsNotSelected().performClick()
+        compose.runOnIdle {
+            assertEquals(org.futo.voiceinput.recognition.DictationLanguage.Slovak, language.value)
+            assertEquals(0, stopped)
+        }
+        sk.assertIsSelected()
+        compose.runOnIdle { state.value = state.value.processing("Processing") }
+        sk.assertDoesNotExist()
+    }
+
+    @Test fun lockedDictationLanguageTapNeitherSwitchesNorStops() {
+        val state = mutableStateOf(RecognitionUiState().start("ASR4ALL").recording())
+        var selected = 0
+        var stopped = 0
+        compose.setContent {
+            MaterialTheme {
+                RecognizerInputMethodWindow(switchBack = { }, allowClick = true, onFinish = { stopped++ }) {
+                    RecognitionContent(state.value, compact = true, onFinish = { stopped++ },
+                        dictationLanguage = org.futo.voiceinput.recognition.DictationLanguage.English,
+                        onDictationLanguage = { selected++ }, dictationLanguageLocked = true)
+                }
+            }
+        }
+        compose.onNodeWithContentDescription(compose.activity.getString(R.string.dictation_language_sk_description),
+            useUnmergedTree = true).assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(0, selected); assertEquals(0, stopped) }
+    }
+
     @Test fun waveformTextCaptionAndStatusCoexistAcrossUpdates() {
         val state = mutableStateOf(RecognitionUiState().start("Orukeet").recording())
         compose.setContent { MaterialTheme { RecognitionContent(state.value) } }

@@ -21,7 +21,7 @@ enum class DiagnosticEvent {
     DOWNLOAD_STARTED, DOWNLOAD_FAILED, DOWNLOAD_FINISHED, DOWNLOAD_CANCELLED,
     RESOURCE_SAMPLE, MANAGED_CRASH, PROCESS_EXIT, RETRANSCRIPTION_FINISHED, WAVEFORM_FIRST_FRAME,
     MICROPHONE_ROUTE_CHANGED, KEYBOARD_SWITCH_FAILED, CAPTURE_SUMMARY, NO_SPEECH,
-    HISTORY_OPERATION_FAILED, MODEL_OPERATION_FAILED
+    HISTORY_OPERATION_FAILED, MODEL_OPERATION_FAILED, LANGUAGE_PROBE
 }
 
 @Serializable
@@ -76,7 +76,8 @@ data class DiagnosticRecord(
     val sequence: Long? = null,
     val collectionMode: DiagnosticCollectionMode? = null,
     val configuration: DiagnosticConfiguration? = null,
-    val reportId: String? = null
+    val reportId: String? = null,
+    val languageProbe: DiagnosticLanguageProbe? = null
 )
 
 @Serializable
@@ -158,7 +159,8 @@ class DiagnosticStore(
         error: Throwable? = null,
         detailed: Boolean = false,
         configuration: DiagnosticConfiguration? = null,
-        reportId: String? = null
+        reportId: String? = null,
+        languageProbe: DiagnosticLanguageProbe? = null
     ) {
         if (!policy.enabled || (detailed && detailedRemainingMs() == 0L)) return
         val safeSession = sessionId?.takeIf {
@@ -169,7 +171,8 @@ class DiagnosticStore(
             failure = error?.let(DiagnosticFailure::from), collectorId = collectorId, sequence = ++sequence,
             collectionMode = if (detailedRemainingMs() > 0) DiagnosticCollectionMode.Detailed else DiagnosticCollectionMode.Standard,
             configuration = configuration?.sanitized(),
-            reportId = reportId?.takeIf { it.matches(Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")) })
+            reportId = reportId?.takeIf { it.matches(Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")) },
+            languageProbe = languageProbe?.sanitized())
         val line = json.encodeToString(record) + "\n"
         val bytes = line.toByteArray(Charsets.UTF_8)
         if (bytes.size > 32 * 1024 || bytes.size > maxBytes) {

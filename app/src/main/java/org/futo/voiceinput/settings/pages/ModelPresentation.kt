@@ -31,7 +31,7 @@ data class ModelInformationLink(val label: String, val url: String)
 fun modelFamiliesForDisplay(): Map<String, List<RecognitionModelCard>> =
     modelCardsForDisplay().groupBy { card ->
         when (card.runtimeId) {
-            "parakeet", "parakeet_unified", "parakeet_redux" -> "Parakeet"
+            "parakeet", "parakeet_unified", "parakeet_redux", "parakeet_ultra", "parakeet_sk" -> "Parakeet"
             "nemotron" -> "Nemotron"
             else -> card.displayName
         }
@@ -59,6 +59,8 @@ private fun modelInformationLinks(model: RecognitionModel): List<ModelInformatio
         else "https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b"
         "parakeet" -> "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
         "orukeet" -> "https://huggingface.co/oruk/orukeet"
+        "parakeet_ultra" -> "https://huggingface.co/moondream/parakeet-ultra"
+        "parakeet_sk" -> "https://huggingface.co/kinit/parakeet-tdt-0.6b-v3-sk"
         "parakeet_redux" -> "https://huggingface.co/moondream/parakeet-redux"
         "phonon" -> "https://www.fermionresearch.com/models/phonon-2/"
         "whistle" -> "https://huggingface.co/Cactus-Compute/whistle"
@@ -87,7 +89,10 @@ fun recognitionLanguageGuidance(model: RecognitionModel): String = when {
             "Automatic language detection is not available, and mixed-language speech may be inaccurate."
     model.runtimeId == "nemotron" && model.variantId == "multilingual" ->
         "${model.recognitionLanguages}. Choose a recognition language or Auto-detect."
-    model.runtimeId in setOf("parakeet", "orukeet", "parakeet_redux", "whistle") ->
+    model.runtimeId == "parakeet_sk" ->
+        "Tuned for Slovak. Quality in other languages, including English, may be lower. " +
+            "No manual language selector is available."
+    model.runtimeId in setOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_redux", "whistle") ->
         "${model.recognitionLanguages}. The model recognizes the spoken language automatically; " +
             "no manual language selector is available."
     else -> "${model.recognitionLanguages} only. " +

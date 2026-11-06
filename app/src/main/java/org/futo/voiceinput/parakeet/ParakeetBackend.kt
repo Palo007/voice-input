@@ -67,7 +67,7 @@ class ParakeetBackend internal constructor(
         }
         try {
             mutex.withLock {
-                decoderOrThrow().transcribe(samples).also { result ->
+                decoderOrThrow().transcribe(InputLevel.normalize(samples)).also { result ->
                     if (diagnosticsEnabled) {
                         val outcome = if (result.isBlank()) "no_speech" else "text"
                         Log.i(
@@ -98,6 +98,14 @@ class ParakeetBackend internal constructor(
 
 internal fun orukeetBackend(): SpeechBackend = ParakeetBackend(
     decoderFactory = { SherpaParakeetDecoder(it, OrukeetModel.recognitionModel, featureDim = 128) }
+)
+
+internal fun parakeetUltraBackend(): ParakeetBackend = ParakeetBackend(
+    decoderFactory = { SherpaParakeetDecoder(it, ParakeetUltraModel.recognitionModel, featureDim = 128) }
+)
+
+internal fun parakeetSlovakBackend(): ParakeetBackend = ParakeetBackend(
+    decoderFactory = { SherpaParakeetDecoder(it, ParakeetSlovakModel.recognitionModel, featureDim = 128) }
 )
 
 private class SherpaParakeetDecoder(

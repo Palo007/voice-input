@@ -2,6 +2,8 @@ package org.futo.voiceinput.recognition
 
 import org.futo.voiceinput.parakeet.ParakeetModel
 import org.futo.voiceinput.parakeet.OrukeetModel
+import org.futo.voiceinput.parakeet.ParakeetSlovakModel
+import org.futo.voiceinput.parakeet.ParakeetUltraModel
 import org.futo.voiceinput.sha256
 import java.io.File
 
@@ -312,6 +314,26 @@ object RecognitionModelCatalog {
             recognitionLanguages = ParakeetModel.recognitionModel.recognitionLanguages,
             performanceClasses = setOf(PerformanceClass.DEMANDING),
             models = listOf(ParakeetModel.recognitionModel)
+        ),
+        RecognitionModelCard(
+            id = "parakeet-ultra",
+            runtimeId = "parakeet_ultra",
+            displayName = "Parakeet Ultra",
+            description = ParakeetUltraModel.recognitionModel.description,
+            transcription = TranscriptionBehavior.FINAL_ONLY,
+            recognitionLanguages = ParakeetUltraModel.recognitionModel.recognitionLanguages,
+            performanceClasses = setOf(PerformanceClass.DEMANDING),
+            models = listOf(ParakeetUltraModel.recognitionModel)
+        ),
+        RecognitionModelCard(
+            id = "parakeet-sk",
+            runtimeId = "parakeet_sk",
+            displayName = "Parakeet TDT V3 Slovak",
+            description = ParakeetSlovakModel.recognitionModel.description,
+            transcription = TranscriptionBehavior.FINAL_ONLY,
+            recognitionLanguages = ParakeetSlovakModel.recognitionModel.recognitionLanguages,
+            performanceClasses = setOf(PerformanceClass.DEMANDING),
+            models = listOf(ParakeetSlovakModel.recognitionModel)
         ),
         RecognitionModelCard(
             id = "orukeet",

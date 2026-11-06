@@ -56,6 +56,44 @@ Upstream's [help change](https://github.com/futo-org/voice-input/commit/a15c965)
 reports text loss with Microsoft SwiftKey. That report has not been reproduced
 in this fork.
 
+## Slovak and English: pick the model by language
+
+If you dictate in both Slovak and English, the app can use the Slovak model for
+Slovak and your selected model (for example Parakeet Ultra) for English.
+
+1. In **Model Options**, download **Parakeet TDT V3 Slovak**. Keep your usual
+   English model selected.
+2. Turn on **Pick the model by language** (in Model Options, above the model
+   list). The switch is greyed out until the Slovak model is downloaded.
+3. Start dictation. An **SK | EN** button appears under the model name:
+   - **SK** uses Parakeet TDT V3 Slovak. English cleanup (Harper, S1) is skipped.
+   - **EN** uses your selected model. English cleanup runs if you turned it on.
+4. Tap SK or EN before you speak or while you speak. The model name under the
+   waveform changes to the model that will be used. Your choice is remembered
+   for the next dictation.
+
+Only one model is kept in memory. The first dictation after switching between
+SK and EN takes a few seconds longer because the other model has to load.
+Dictating again in the same language within the keep-warm time (5 minutes by
+default) does not reload it. If you switch while speaking, what you said before
+the tap is transcribed by the model that was active then, and only the rest goes
+to the other model, so nothing is lost. The split is placed at the last short
+pause before the tap. The app then loads the other model right away; if you
+press Stop before it is ready, the text appears once loading finishes.
+
+The setting does not change your selected model. If you delete the Slovak model,
+the button disappears and dictation uses your selected model. With a model that
+shows live text (for example ASR4ALL), the button is dimmed and cannot be
+changed once recording has started. If your selected model is not downloaded,
+EN cannot be chosen.
+
+The app also tries to read the keyboard's language when dictation starts and
+sets the button from it when it finds Slovak or English. FUTO Keyboard does not
+share its current language with other apps, so with FUTO Keyboard the button
+normally keeps your last choice. To check what your keyboard shares, open
+**Settings > Support > Diagnostics** after a dictation and read
+**Last keyboard language check**.
+
 ## Personal dictionary and cleanup
 
 Use **Personal Dictionary** for predictable corrections, such as `heard phrase => preferred phrase`. Bulk paste and UTF-8 imports up to 1 MiB let you preview additions, skip duplicates, and fix invalid mappings. These are text corrections; they do not train Orukeet or supply it with recognition hints. The optional [Arabic transliteration example](examples/arabic-transliteration.txt) is an editable starting point, not enabled automatically.

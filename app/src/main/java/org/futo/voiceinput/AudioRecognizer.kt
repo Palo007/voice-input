@@ -30,7 +30,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -56,10 +58,13 @@ import org.futo.voiceinput.settings.MOONSHINE_MODEL_VARIANT
 import org.futo.voiceinput.settings.ASR4ALL_VARIANT
 import org.futo.voiceinput.settings.NEMOTRON_PROFILE
 import org.futo.voiceinput.settings.PARAKEET_KEEP_WARM
+import org.futo.voiceinput.settings.PARAKEET_KEEP_TWO_WARM
 import org.futo.voiceinput.settings.PARAKEET_KEEP_WARM_TIMEOUT_MS
 import org.futo.voiceinput.settings.PARAKEET_USE_VAD
 import org.futo.voiceinput.settings.PERSONAL_DICTIONARY
 import org.futo.voiceinput.settings.SPEECH_BACKEND
+import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
+import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
 import org.futo.voiceinput.settings.SpeechBackendType
 import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.parakeet.ParakeetEngineLease
@@ -70,6 +75,11 @@ import org.futo.voiceinput.backend.prepareRecordingFinalization
 import org.futo.voiceinput.recognition.RecognitionModel
 import org.futo.voiceinput.recognition.RecognitionModelLifecycle
 import org.futo.voiceinput.recognition.RecognitionModelSelection
+import org.futo.voiceinput.recognition.DictationLanguage
+import org.futo.voiceinput.recognition.LanguageRouting
+import org.futo.voiceinput.recognition.SwitchSegments
+import org.futo.voiceinput.recognition.PauseChunker
+import org.futo.voiceinput.parakeet.ParakeetEngineManager
 import org.futo.voiceinput.recognition.RecognitionRuntimeCallbacks
 import org.futo.voiceinput.recognition.loadOrCloseOnFailure
 import org.futo.voiceinput.settings.toSpeechBackendType
@@ -85,6 +95,9 @@ private const val AUDIO_READ_SIZE = 1600
 private const val AUTO_STOP_DRAIN_MS = 100L
 private const val PARAKEET_AUTO_STOP_DRAIN_MS = 300L
 private const val FINAL_SILENCE_PAD_MS = 200
+/** How often live text at pauses looks for a finished piece. */
+private const val LIVE_TEXT_POLL_MS = 250L
+private const val LIVE_TEXT_ANALYSIS_SAMPLES = AUDIO_SAMPLE_RATE * 30
 
 internal class NoSpeechRecognizedException : Exception("The recognizer returned no text")
 
@@ -246,6 +259,8 @@ abstract class RecordingSession {
     private var recorderJob: Job? = null
     private var modelJob: Job? = null
     private var loadModelJob: Job? = null
+    /** Decodes pieces at pauses while recording (LIVE_TEXT_AT_PAUSES). Stop waits for it. */
+    private var liveTextJob: Job? = null
     private var personalVocabulary = ""
     private var backup: Pair<Long, AudioHistoryStore.Capture>? = null
     private var backupId: Pair<Long, String>? = null
@@ -286,11 +301,25 @@ abstract class RecordingSession {
 
     private var canExpandSpace = true
 
+    /** Transcripts of the audio before each SK | EN switch while speaking, in order. Guarded by this. */
+    private class DecodedSegment(val text: String, val language: String?)
+    private val decodedSegments = mutableListOf<DecodedSegment>()
+    /** First sample not yet transcribed by an earlier model; the final model decodes from here. Guarded by this. */
+    private var segmentStart = 0
+
     @Synchronized
     private fun clearCapturedSamples() {
         floatSamples.clear()
         waveform.clear()
+        decodedSegments.clear()
+        segmentStart = 0
     }
+
+    @Synchronized
+    private fun capturedSampleCount(): Int = floatSamples.position()
+
+    @Synchronized
+    private fun copyCapturedSamples(from: Int, to: Int): FloatArray = floatSamples.array().copyOfRange(from, to)
 
     @Synchronized
     private fun cancelCapture() {
@@ -396,6 +425,7 @@ abstract class RecordingSession {
         val recorderJobToJoin: Job?
         val modelJobToJoin: Job?
         val loadModelJobToJoin: Job?
+        val liveTextJobToCancel: Job?
         val backendToClose: SpeechBackend?
         val parakeetLeaseToRelease: OwnedParakeetLease?
         val backupToClose: AudioHistoryStore.Capture?
@@ -410,6 +440,8 @@ abstract class RecordingSession {
             recorderJobToJoin = recorderJob
             modelJobToJoin = modelJob
             loadModelJobToJoin = loadModelJob
+            liveTextJobToCancel = liveTextJob
+            liveTextJob = null
             backendToClose = backend
             parakeetLeaseToRelease = parakeetLease
             recorderJob = null
@@ -419,10 +451,16 @@ abstract class RecordingSession {
             backendGeneration = -1L
             parakeetLease = null
             streamingAudio.reset()
+            baseSelection = null
+            sessionSelection = null
+            routingLanguage = null
+            switchableRuntimes = null
+            modelSessionJob = null
         }
         recorderJobToJoin?.cancel()
         modelJobToJoin?.cancel()
         loadModelJobToJoin?.cancel()
+        liveTextJobToCancel?.cancel()
         isRecording = false
 
         clearCapturedSamples()
@@ -491,25 +529,23 @@ abstract class RecordingSession {
 
     internal suspend fun loadModelInner(
         loadBackend: suspend (Context, RecognitionModelSelection, RecognitionRuntimeCallbacks) -> SpeechBackend =
-            { context, selection, callbacks -> modelLifecycle.load(context, selection, callbacks) }
+            { context, selection, callbacks ->
+                // Dictation never writes the saved model choice; it only reads it (see language routing).
+                modelLifecycle.load(context, selection, callbacks, persistSelection = false)
+            }
     ) {
         val loadGeneration = recognitionGeneration
         val report = diagnostics
         val loadStarted = SystemClock.elapsedRealtime()
         try {
-            val selection = liveBenchmarkSession?.selection ?: RecognitionModelSelection(
-                runtimeId = context.getSetting(SPEECH_BACKEND),
-                moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
-                nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
-                asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
-            )
+            val selection = liveBenchmarkSession?.selection ?: sessionSelection ?: savedSelection()
             runCatching {
                 report?.event(DiagnosticEvent.MODEL_LOAD_STARTED, configuration = DiagnosticConfiguration(
                     runtime = selection.runtimeId,
                     modelVersion = modelLifecycle.readiness(selection)?.installedModel?.version,
-                    runtimeVersion = if (selection.runtimeId in setOf("parakeet", "orukeet", "parakeet_unified", "nemotron", "cohere"))
+                    runtimeVersion = if (selection.runtimeId in setOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_sk", "parakeet_unified", "nemotron", "cohere"))
                         BuildConfig.SHERPA_ONNX_VERSION else null,
-                    language = forcedLanguage.takeIf { selection.runtimeId == "whisper_ggml" }
+                    language = if (selection.runtimeId == "whisper_ggml") forcedLanguage else routingLanguage
                 ))
             }
             val loadedBackend = if (liveBenchmarkSession != null) {
@@ -560,6 +596,7 @@ abstract class RecordingSession {
                 throw CancellationException("Recognition was reset while the model loaded")
             }
             (loadedBackend as? StreamingSpeechBackend)?.let(::startStreaming)
+            if (loadedBackend is ParakeetEngineLease) preloadOtherRoutedModel(loadGeneration)
             report?.event(DiagnosticEvent.MODEL_LOAD_FINISHED,
                 mapOf(DiagnosticMetric.DURATION_MS to SystemClock.elapsedRealtime() - loadStarted))
         } catch (error: CancellationException) {
@@ -599,34 +636,261 @@ abstract class RecordingSession {
         forcedLanguage = language
     }
 
+    // Language routing (SK | EN button). Chooses the model per recording; SPEECH_BACKEND is never written.
+    // Written on the main thread; read by the load and decode coroutines.
+    @Volatile private var dictationLanguage: DictationLanguage? = null
+    /** The saved model choice, read once per dictation in create(). */
+    @Volatile private var baseSelection: RecognitionModelSelection? = null
+    /** The model used for this dictation: [baseSelection] or the Slovak model. Null until create() commits it. */
+    @Volatile private var sessionSelection: RecognitionModelSelection? = null
+    /** ROUTE_BY_LANGUAGE is on and the Slovak model is installed (never during model comparison). */
+    @Volatile private var routingAvailable = false
+    /** "sk" or "en" for the Harper and S1 gates while routing is active. Whisper's forcedLanguage stays separate. */
+    @Volatile private var routingLanguage: String? = null
+    /** Runtimes the button may switch to in this dictation (installed); null until create() has checked. */
+    @Volatile private var switchableRuntimes: Set<String>? = null
+    /** Whisper's caption when the saved model is Whisper (it has no catalog entry). */
+    private var whisperCaption: String? = null
+    private var modelSessionJob: Job? = null
+
+    private suspend fun savedSelection() = RecognitionModelSelection(
+        runtimeId = context.getSetting(SPEECH_BACKEND),
+        moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
+        nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
+        asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
+    )
+
+    private fun routedSelection(language: DictationLanguage?): RecognitionModelSelection? {
+        val base = baseSelection ?: return null
+        val runtime = LanguageRouting.routeRuntime(base.runtimeId, routingAvailable, slovakInstalled = true, language)
+        return if (runtime == base.runtimeId) base else RecognitionModelSelection(runtimeId = runtime)
+    }
+
+    /** Runtime of this dictation's model; model comparison keeps its own selection. */
+    private suspend fun effectiveRuntimeId(): String =
+        liveBenchmarkSession?.selection?.runtimeId ?: sessionSelection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)
+
+    private fun modelCaption(model: RecognitionModel?, backendType: SpeechBackendType): String? =
+        if (backendType == SpeechBackendType.WhisperGGML) whisperCaption
+        else model?.displayName?.let { name ->
+            if (backendType == SpeechBackendType.Nemotron && !name.startsWith("Nemotron")) "Nemotron $name" else name
+        }
+
+    private suspend fun isInstalled(selection: RecognitionModelSelection): Boolean =
+        if (selection.runtimeId.toSpeechBackendType() == SpeechBackendType.WhisperGGML) {
+            context.selectedWhisperModelsForCurrentSettings(forcedLanguage).none { context.modelNeedsDownloading(it) }
+        } else modelLifecycle.readiness(selection)?.isReady != false
+
+    /** Applies the current SK | EN choice to this dictation's model state. Main thread, no suspension. */
+    private fun commitSessionSelection(selection: RecognitionModelSelection) {
+        val type = selection.runtimeId.toSpeechBackendType()
+        val model = modelLifecycle.readiness(selection)?.model
+        sessionSelection = selection
+        routingLanguage = LanguageRouting.cleanupLanguage(routingAvailable, slovakInstalled = true, dictationLanguage)
+        selectedManagedModel = model
+        selectedModelName = modelCaption(model, type)
+    }
+
+    private fun isStreamingRuntime(backendType: SpeechBackendType) =
+        backendType == SpeechBackendType.ParakeetUnified ||
+            backendType == SpeechBackendType.Nemotron ||
+            backendType == SpeechBackendType.Asr4all ||
+            backendType == SpeechBackendType.Moonshine
+
+    /** Whether the Slovak model is installed; the SK | EN button is only offered then. */
+    fun slovakModelInstalled(): Boolean = runCatching {
+        modelLifecycle.readiness(RecognitionModelSelection(runtimeId = LanguageRouting.SLOVAK_RUNTIME))?.isReady == true
+    }.getOrDefault(false)
+
+    protected open fun routedModelChanged(modelName: String?) {}
+
+    /** Live-text models replay audio from the start of a recording, so they cannot be swapped in mid-recording. */
+    fun dictationLanguageSwitchableWhileRecording(): Boolean = DictationLanguage.values().all { language ->
+        routedSelection(language)?.runtimeId?.toSpeechBackendType()?.let { !isStreamingRuntime(it) } ?: true
+    }
+
+    /**
+     * Sets the SK | EN choice for this dictation. Call on the main thread.
+     * Before recording it only changes which model will load. During recording the old engine is
+     * closed and the other model starts loading at once, while the user keeps talking.
+     * Returns false when the switch is not possible now (after Stop, or a live-text model is involved).
+     */
+    fun setDictationLanguage(language: DictationLanguage?): Boolean {
+        val next = routedSelection(language)
+        val targets = switchableRuntimes
+        if (next != null && targets != null && next.runtimeId !in targets) return false
+        val previous = sessionSelection
+        if (liveBenchmarkSession != null || previous == null || next == null) {
+            // create() has not committed the model yet; it applies the latest language itself.
+            dictationLanguage = language
+            return true
+        }
+        val generation = recognitionGeneration
+        val loading = synchronized(this) { loadModelJob != null || backendForGeneration(generation) != null }
+        if (next == previous) {
+            dictationLanguage = language
+            routingLanguage = LanguageRouting.cleanupLanguage(routingAvailable, slovakInstalled = true, language)
+            return true
+        }
+        val previousType = previous.runtimeId.toSpeechBackendType()
+        val nextType = next.runtimeId.toSpeechBackendType()
+        if (loading && (!isRecording || isStreamingRuntime(previousType) || isStreamingRuntime(nextType))) return false
+
+        // Everything spoken before the tap stays with the model that was active then.
+        val tapSample = capturedSampleCount()
+        val previousLanguage = routingLanguage
+        dictationLanguage = language
+        commitSessionSelection(next)
+        routedModelChanged(selectedModelName)
+        if (!loading) streamingAudio.reset(isStreamingRuntime(nextType))
+        swapModelSession(generation, selectedManagedModel)
+        if (loading) reloadRoutedModel(generation, tapSample, previousLanguage)
+        return true
+    }
+
+    /**
+     * With PARAKEET_KEEP_TWO_WARM and the SK | EN button, loads the model of the other language in the
+     * background once this dictation's model is ready, so the first switch is instant too.
+     */
+    private fun preloadOtherRoutedModel(generation: Long) {
+        if (!routingAvailable || liveBenchmarkSession != null) return
+        val current = sessionSelection?.runtimeId ?: return
+        val other = switchableRuntimes?.firstOrNull { it != current } ?: return
+        lifecycleScope.launch(Dispatchers.Default) {
+            if (generation != recognitionGeneration) return@launch
+            if (!modelLifecycle.canPreload(RecognitionModelSelection(runtimeId = other))) return@launch
+            try {
+                val timeoutMs = context.getSetting(PARAKEET_KEEP_WARM_TIMEOUT_MS)
+                // Not cancelled with the dictation: a finished load must still be stored or closed.
+                withContext(NonCancellable) { ParakeetEngineManager.preload(context, other, timeoutMs) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                // Optional: a failed preload only means the switch loads the model as before.
+                if (error !is Exception && error !is OutOfMemoryError) throw error
+                Log.e("AudioRecognizer", "Preloading the other language model failed (${DiagnosticFailure.from(error).kind})")
+            }
+        }
+    }
+
+    /** Keeps model deletion blocked for the model this dictation now uses. */
+    private fun swapModelSession(generation: Long, model: RecognitionModel?) {
+        val pendingSession = modelSessionJob
+        lifecycleScope.launch {
+            // Wait until the dictation stored its first session, so the swap cannot be overwritten by it.
+            pendingSession?.join()
+            val lease = try { modelLifecycle.acquireSession(model) } catch (_: Exception) { return@launch }
+            val old = synchronized(this@RecordingSession) {
+                val current = modelSession
+                if (generation == recognitionGeneration && current?.first == generation) {
+                    modelSession = generation to lease
+                    current.second
+                } else lease // Recording never started or was reset.
+            }
+            old.close()
+        }
+    }
+
+    /**
+     * Transcribes the audio before the tap ([segmentStart] to a quiet point near [tapSample]) with the
+     * model that was active then, so the next model only gets the rest. Keeps the audio for the next
+     * model when there is too little of it or the decode fails, so nothing is dropped.
+     */
+    private suspend fun decodeSegmentBeforeSwitch(
+        generation: Long,
+        oldBackend: SpeechBackend,
+        tapSample: Int,
+        language: String?
+    ) {
+        val start = synchronized(this) { segmentStart }
+        if (tapSample - start < SwitchSegments.MIN_SEGMENT_SAMPLES) return
+        val audio = copyCapturedSamples(start, tapSample)
+        val cut = SwitchSegments.quietCut(audio, start, tapSample)
+        val text = try {
+            oldBackend.transcribe(audio.copyOf(cut - start))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            // Includes OutOfMemoryError: the audio stays with the next model instead of being lost.
+            if (error !is Exception && error !is OutOfMemoryError) throw error
+            Log.e("AudioRecognizer", "Decoding before the model switch failed (${DiagnosticFailure.from(error).kind})")
+            return
+        }
+        synchronized(this) {
+            if (generation != recognitionGeneration || segmentStart != start) return
+            decodedSegments += DecodedSegment(text, language)
+            segmentStart = cut
+        }
+    }
+
+    /** Releases this recording's engine and loads the routed model. Stop waits for this job. */
+    private fun reloadRoutedModel(generation: Long, tapSample: Int, previousLanguage: String?) {
+        synchronized(this) {
+            val previousLoad = loadModelJob
+            loadModelJob = lifecycleScope.launch {
+                // reset() cancels only the latest job; take the earlier ones in the chain down with it.
+                coroutineContext[Job]?.invokeOnCompletion { if (it is CancellationException) previousLoad?.cancel() }
+                withContext(Dispatchers.Default) {
+                    previousLoad?.join()
+                    val (oldBackend, oldLease) = synchronized(this@RecordingSession) {
+                        // A failed earlier load cancels the capture; do not load another engine for it.
+                        if (generation != recognitionGeneration || stopReason == StopReason.Cancel) return@withContext
+                        val loaded = backend.takeIf { backendGeneration == generation }
+                        val lease = parakeetLease?.takeIf { it.generation == generation }
+                        if (loaded != null) { backend = null; backendGeneration = -1L }
+                        if (lease != null) parakeetLease = null
+                        loaded to lease
+                    }
+                    try {
+                        (oldBackend ?: oldLease?.lease)?.let { old ->
+                            decodeSegmentBeforeSwitch(generation, old, tapSample, previousLanguage)
+                        }
+                    } finally {
+                        withContext(NonCancellable) {
+                            if (oldLease != null) {
+                                // With one engine allowed it is closed before the new load. With two it stays
+                                // loaded, so switching back needs no reload.
+                                val keepTwo = context.getSetting(PARAKEET_KEEP_WARM) && context.getSetting(PARAKEET_KEEP_TWO_WARM)
+                                modelLifecycle.release(oldLease.lease, lifecycleScope, keepWarm = keepTwo,
+                                    timeoutMs = context.getSetting(PARAKEET_KEEP_WARM_TIMEOUT_MS))
+                            } else if (oldBackend != null) modelLifecycle.release(oldBackend, lifecycleScope)
+                        }
+                    }
+                    // The decode above takes seconds; a reset meanwhile must not load an engine for the next dictation.
+                    if (generation != recognitionGeneration || stopReason == StopReason.Cancel) return@withContext
+                    loadModelInner()
+                }
+            }
+        }
+    }
+
     fun create() {
         selectedModelName = null
         loading()
 
         lifecycleScope.launch {
-            val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+            val base = liveBenchmarkSession?.selection ?: savedSelection()
+            baseSelection = base
+            routingAvailable = liveBenchmarkSession == null &&
+                LanguageRouting.isActive(context.getSetting(ROUTE_BY_LANGUAGE), slovakModelInstalled())
+            whisperCaption = if (base.runtimeId.toSpeechBackendType() == SpeechBackendType.WhisperGGML) {
+                context.selectedWhisperModelsForCurrentSettings(forcedLanguage).joinToString(" / ") {
+                    it.name.substringBefore(" (")
+                }
+            } else null
+            switchableRuntimes = if (routingAvailable) {
+                DictationLanguage.values().mapNotNull { routedSelection(it) }.distinct()
+                    .filter { isInstalled(it) }.map { it.runtimeId }.toSet()
+            } else null
+            // The model checks below use the language chosen so far; a tap meanwhile is committed after them.
+            val selection = if (liveBenchmarkSession != null) base else routedSelection(dictationLanguage) ?: base
+            val backendType = selection.runtimeId.toSpeechBackendType()
             diagnostics?.end(DiagnosticEvent.SESSION_RESET)
             diagnosticSamplingJob?.cancel()
             personalVocabulary = if (liveBenchmarkSession != null) "" else context.getSetting(PERSONAL_DICTIONARY)
-            val readiness = RecognitionModelLifecycle.create(
-                context.filesDir,
-                BuildConfig.BUNDLE_PARAKEET_MODEL
-            ).readiness(
-                liveBenchmarkSession?.selection ?: RecognitionModelSelection(
-                    runtimeId = backendType.id,
-                    moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
-                    nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
-                    asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
-                )
-            )
+            val readiness = modelLifecycle.readiness(selection)
             selectedManagedModel = readiness?.model
-            selectedModelName = readiness?.model?.displayName?.let { name ->
-                if (backendType == SpeechBackendType.Nemotron && !name.startsWith("Nemotron")) {
-                    "Nemotron $name"
-                } else {
-                    name
-                }
-            }
+            selectedModelName = modelCaption(readiness?.model, backendType)
             val report = AppDiagnostics.session(readiness?.model?.id ?: backendType.id)
             diagnostics = report
             report?.event(DiagnosticEvent.SESSION_STARTED)
@@ -644,12 +908,7 @@ abstract class RecordingSession {
                 needRecognitionModelDownload(readiness.model)
                 return@launch
             }
-            streamingAudio.reset(
-                backendType == SpeechBackendType.ParakeetUnified ||
-                    backendType == SpeechBackendType.Nemotron ||
-                    backendType == SpeechBackendType.Asr4all ||
-                    backendType == SpeechBackendType.Moonshine
-            )
+            streamingAudio.reset(isStreamingRuntime(backendType))
             if (backendType == SpeechBackendType.WhisperGGML) {
                     val requiredModels = liveBenchmarkSession?.model?.whisper?.let { listOf(it) }
                         ?: context.selectedWhisperModelsForCurrentSettings(forcedLanguage)
@@ -661,6 +920,20 @@ abstract class RecordingSession {
                         needWhisperModelDownload(requiredModels)
                         return@launch
                     }
+            }
+
+            // No suspension from here on: commit the model for the latest SK | EN choice.
+            if (liveBenchmarkSession != null) {
+                sessionSelection = selection
+            } else {
+                val committed = routedSelection(dictationLanguage)?.takeIf {
+                    it == selection || switchableRuntimes?.contains(it.runtimeId) == true
+                } ?: selection
+                commitSessionSelection(committed)
+                if (committed != selection) {
+                    streamingAudio.reset(isStreamingRuntime(committed.runtimeId.toSpeechBackendType()))
+                    routedModelChanged(selectedModelName)
+                }
             }
 
             if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -698,7 +971,7 @@ abstract class RecordingSession {
 
     private fun startRecordingWithModelSession() {
         val generation = recognitionGeneration
-        lifecycleScope.launch {
+        modelSessionJob = lifecycleScope.launch {
             val lease = try { modelLifecycle.acquireSession(selectedManagedModel) } catch (failure: Exception) {
                 failRecognition(failure, generation)
                 return@launch
@@ -787,7 +1060,7 @@ abstract class RecordingSession {
             recorderJob = lifecycleScope.launch {
                 withContext(Dispatchers.Default) {
                     canExpandSpace = context.getSetting(ENABLE_30S_LIMIT) == false
-                    val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+                    val backendType = effectiveRuntimeId().toSpeechBackendType()
                     val shouldUseVad = context.getSetting(IS_VAD_ENABLED) &&
                         (backendType != SpeechBackendType.Parakeet || context.getSetting(PARAKEET_USE_VAD))
                     val endOfSpeechProfile = context.getSetting(END_OF_SPEECH_PROFILE).toEndOfSpeechProfile()
@@ -1031,6 +1304,7 @@ abstract class RecordingSession {
             // everything we just did.
             // TODO: We could check if the model exists before doing all this work
             loadModel()
+            startLiveTextAtPauses(captureGeneration)
 
             liveBenchmarkSession?.milestone("recordingStarted")
             recordingStarted()
@@ -1086,6 +1360,64 @@ abstract class RecordingSession {
         return AppendResult.Accepted
     }
 
+    /**
+     * Live text at pauses (issue #52, idea 2): while recording with an offline Parakeet model,
+     * decodes each piece that ends at a pause and shows the text so far. The pieces are stored like
+     * the parts before an SK | EN switch, so after Stop only the audio after the last piece is decoded.
+     */
+    private fun startLiveTextAtPauses(generation: Long) {
+        if (liveBenchmarkSession != null) return
+        val job = lifecycleScope.launch(Dispatchers.Default) {
+            if (!context.getSetting(LIVE_TEXT_AT_PAUSES)) return@launch
+            val report = diagnostics
+            while (generation == recognitionGeneration && stopReason == null && isActive) {
+                delay(LIVE_TEXT_POLL_MS)
+                if (sessionSelection?.runtimeId !in PauseChunker.OFFLINE_PARAKEET_RUNTIMES) continue
+                // Read before the backend: a tap in between then tags the piece with the old language.
+                val language = routingLanguage
+                // Null while the model loads or an SK | EN switch reloads it.
+                val pieceBackend = backendForGeneration(generation) ?: continue
+                val (start, end) = synchronized(this@RecordingSession) { segmentStart to capturedSampleCount() }
+                if (end - start < PauseChunker.MIN_CHUNK_SAMPLES) continue
+                // Only the newest audio is searched for a pause, so a long quiet stretch with no cut
+                // does not make each poll copy and scan the whole recording.
+                val windowStart = maxOf(start, end - LIVE_TEXT_ANALYSIS_SAMPLES)
+                val cut = PauseChunker.findCut(copyCapturedSamples(windowStart, end), windowStart, end) ?: continue
+                // Stop may have come during the search; do not start a new decode it would wait for.
+                if (!isActive || stopReason != null || generation != recognitionGeneration) break
+                val piece = copyCapturedSamples(start, cut)
+                // Not cancelled by Stop: the decoded piece is kept and Stop waits for it.
+                val shown = withContext(NonCancellable) {
+                    val text = try {
+                        pieceBackend.transcribe(piece)
+                    } catch (error: Throwable) {
+                        // The audio stays for the next piece or the final decode, so nothing is lost.
+                        if (error !is Exception && error !is OutOfMemoryError) throw error
+                        Log.e("AudioRecognizer", "Live text decode failed (${DiagnosticFailure.from(error).kind})")
+                        return@withContext null
+                    }
+                    synchronized(this@RecordingSession) {
+                        // An SK | EN switch takes the engine and decodes from segmentStart itself.
+                        if (generation != recognitionGeneration || segmentStart != start ||
+                            backendForGeneration(generation) !== pieceBackend) return@synchronized null
+                        decodedSegments += DecodedSegment(text, language)
+                        segmentStart = cut
+                        SwitchSegments.join(decodedSegments.map { it.text })
+                    }
+                } ?: continue
+                report?.partial(shown.length)
+                withContext(Dispatchers.Main) {
+                    if (generation == recognitionGeneration) {
+                        partialResult(PersonalVocabulary.apply(shown, personalVocabulary))
+                    }
+                }
+            }
+        }
+        synchronized(this) {
+            if (generation == recognitionGeneration) liveTextJob = job else job.cancel()
+        }
+    }
+
     private fun startStreaming(backend: StreamingSpeechBackend) {
         val report = diagnostics
         val streamGeneration = recognitionGeneration
@@ -1122,7 +1454,7 @@ abstract class RecordingSession {
     ) {
         val drainMs = RecordingSessionPolicy.tailDrainMs(
             reason,
-            context.getSetting(SPEECH_BACKEND).toSpeechBackendType(),
+            effectiveRuntimeId().toSpeechBackendType(),
             context.getSetting(MANUAL_STOP_DRAIN_MS)
         )
         captureEvidence?.takeIf { it.first == captureGeneration }?.second?.drainRequestedMs = drainMs
@@ -1200,6 +1532,9 @@ abstract class RecordingSession {
     private suspend fun runModelInner(runGeneration: Long, runLoadModelJob: Job?) {
         val report = diagnostics
         val savedAudioId = synchronized(this) { backupId?.takeIf { it.first == runGeneration }?.second }
+        // Stop ends the live-text loop at once; a piece already being decoded is finished and kept,
+        // so the final decode starts after it.
+        synchronized(this) { liveTextJob.takeIf { runGeneration == recognitionGeneration } }?.cancelAndJoin()
         if(runLoadModelJob != null && runLoadModelJob.isActive) {
             println("Model was not finished loading...")
             runLoadModelJob.join()
@@ -1222,11 +1557,24 @@ abstract class RecordingSession {
         runBackend ?: throw IllegalStateException("Model did not load for this recognition")
 
         val finalStopReason = stopReason
-        val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+        val backendType = effectiveRuntimeId().toSpeechBackendType()
+        // Whisper keeps its forced language first; for other models the SK | EN choice wins over the old picker.
+        // Parts spoken before an SK | EN switch were already transcribed by the model active then.
+        val (earlierSegments, finalStart) = synchronized(this) { decodedSegments.toList() to segmentStart }
+        val routedLanguage = if (earlierSegments.isEmpty()) routingLanguage
+            else SwitchSegments.cleanupLanguage(earlierSegments.map { it.language }, routingLanguage)
+        val cleanupLanguage = if (backendType == SpeechBackendType.WhisperGGML) forcedLanguage ?: routedLanguage
+            else routedLanguage ?: forcedLanguage
         val vadEnabled = context.getSetting(IS_VAD_ENABLED) &&
             (backendType != SpeechBackendType.Parakeet || context.getSetting(PARAKEET_USE_VAD))
-        val sampleCount = floatSamples.position()
-        val finalizeRecording = runBackend.prepareRecordingFinalization(floatSamples)
+        val sampleCount = capturedSampleCount()
+        val finalizeRecording: suspend () -> String = if (earlierSegments.isEmpty() || runBackend is StreamingSpeechBackend) {
+            runBackend.prepareRecordingFinalization(floatSamples)
+        } else {
+            val rest = copyCapturedSamples(finalStart, sampleCount)
+            val decodeRest: suspend () -> String = { if (rest.isEmpty()) "" else runBackend.transcribe(rest) }
+            decodeRest
+        }
         if (BuildConfig.DEBUG) {
             var sumSquares = 0.0
             var peak = 0.0f
@@ -1250,7 +1598,7 @@ abstract class RecordingSession {
             val recognitionStarted = SystemClock.elapsedRealtime()
             report?.event(DiagnosticEvent.RECOGNITION_STARTED,
                 mapOf(DiagnosticMetric.AUDIO_MS to sampleCount.toLong() * 1000 / AUDIO_SAMPLE_RATE))
-            val rawText = finalizeRecording()
+            val rawText = SwitchSegments.join(earlierSegments.map { it.text } + finalizeRecording())
             liveBenchmarkSession?.raw(rawText)
             if (liveBenchmarkSession != null) return@run rawText
             report?.event(DiagnosticEvent.RECOGNITION_FINISHED, mapOf(
@@ -1259,7 +1607,7 @@ abstract class RecordingSession {
                 configuration = DiagnosticConfiguration(language = runBackend.detectedLanguage))
             saveBackupTranscript(savedAudioId, rawText)
             val finalized = TranscriptFinalizer.clean(context, rawText, backendType,
-                runBackend.detectedLanguage, forcedLanguage, personalVocabulary, report,
+                runBackend.detectedLanguage, cleanupLanguage, personalVocabulary, report,
                 onCleaning = { withContext(Dispatchers.Main) { cleaning() } })
             validEmpty = finalized.validEmpty
             transcriptCapture = finalized.capture

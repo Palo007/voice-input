@@ -20,6 +20,8 @@ import org.futo.voiceinput.diagnostics.DiagnosticConfiguration
 import org.futo.voiceinput.diagnostics.DiagnosticEvent
 import org.futo.voiceinput.diagnostics.DiagnosticMetric
 import org.futo.voiceinput.ml.RunState
+import org.futo.voiceinput.parakeet.ParakeetEngineManager
+import org.futo.voiceinput.parakeet.WARM_PARAKEET_RUNTIMES
 import org.futo.voiceinput.parakeet.acquireParakeetRuntime
 import org.futo.voiceinput.parakeet.releaseParakeetArtifacts
 import org.futo.voiceinput.parakeet.releaseParakeetRuntime
@@ -101,11 +103,15 @@ class RecognitionModelLifecycle(
         }
     }
 
+    /** Whether a background preload of [selection]'s engine is allowed now: installed and no model comparison. */
+    fun canPreload(selection: RecognitionModelSelection): Boolean =
+        !benchmarkOwned && runCatching { readiness(selection)?.isReady == true }.getOrDefault(false)
+
     suspend fun acquireBenchmark(): AutoCloseable = runtimeMutex.withLock {
         check(!benchmarkOwned && activeRuntimes.isEmpty() && synchronized(activeSessions) { activeSessions.isEmpty() }) {
             "Dictation or another comparison is active. Finish it before comparing models."
         }
-        releaseParakeetArtifacts("parakeet")
+        ParakeetEngineManager.forceClose()
         benchmarkOwned = true
         AutoCloseable { benchmarkOwned = false; runtimeChanges.update { it + 1 } }
     }
@@ -190,22 +196,26 @@ class RecognitionModelLifecycle(
     suspend fun load(
         context: Context,
         selection: RecognitionModelSelection,
-        callbacks: RecognitionRuntimeCallbacks
+        callbacks: RecognitionRuntimeCallbacks,
+        /** False for a per-recording language route, which must not change the saved model choice. */
+        persistSelection: Boolean = true
     ): SpeechBackend = acquireRuntime(selection) {
-        context.updateRecognitionModelSelection(selection)
+        if (persistSelection) context.updateRecognitionModelSelection(selection)
         val runtime = selection.runtimeId.toSpeechBackendType()
-        val backend = when (runtime) {
-            SpeechBackendType.Parakeet -> acquireParakeetRuntime(context)
-            SpeechBackendType.WhisperGGML -> WhisperGGMLBackend(
+        val warm = runtime.id in WARM_PARAKEET_RUNTIMES
+        val backend = when {
+            warm -> acquireParakeetRuntime(context, runtime.id)
+            runtime == SpeechBackendType.WhisperGGML -> WhisperGGMLBackend(
                 callbacks.onStatusUpdate,
                 callbacks.onPartialDecode,
                 callbacks.forceLanguageProvider
             )
             else -> managedRecognitionBackend(context, selection.copy(runtimeId = runtime.id))
         }
-        if (selection.runtimeId != SpeechBackendType.Parakeet.id) {
-            models.firstOrNull { it.runtimeId == SpeechBackendType.Parakeet.id }?.let {
-                if (!modelInUse(it)) releaseParakeetArtifacts(SpeechBackendType.Parakeet.id)
+        if (!warm) {
+            // Free the warm Parakeet engines before another model needs the memory.
+            ParakeetEngineManager.warmRuntimeIds().forEach { warmRuntime ->
+                if (models.none { it.runtimeId == warmRuntime && modelInUse(it) }) releaseParakeetArtifacts(warmRuntime)
             }
             backend.loadOrCloseOnFailure { load(context) }
         }

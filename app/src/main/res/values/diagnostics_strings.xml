@@ -23,4 +23,7 @@
     <string name="app_diagnostics_clear">Clear diagnostic history</string>
     <string name="app_diagnostics_clear_description">Delete standard app and S1-mini reports and prepared exports, and stop detailed mode. Saved recordings and separately captured transcripts remain available.</string>
     <string name="app_diagnostics_cleared">Diagnostic history cleared</string>
+    <string name="app_diagnostics_language_probe">Last keyboard language check</string>
+    <string name="app_diagnostics_language_probe_value">%1$s: %2$s</string>
+    <string name="app_diagnostics_language_probe_none">No dictation since the app started. Start voice input from your keyboard, then come back here to see which language signals the app received (locale tags and keyboard id only).</string>
 </resources>

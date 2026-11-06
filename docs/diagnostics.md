@@ -20,6 +20,14 @@ History retranscription emits ordinary model-load, recognition, and cleanup timi
 
 Verified on 2026-09-25 with JDK 17 and Android SDK 35: `:app:testDevDebugUnitTest :app:lintDevDebug` succeeded. The suite reported 112 tests, zero failures/errors, and one skipped test; all ten new diagnostics tests passed. Standards and spec reviews found archive expiry and S1 failure-category omissions, both corrected and rechecked. No Android device was connected, so recording, visual/accessibility behavior, and share-sheet handling still require a device smoke test before release.
 
+## Investigating empty or poor results
+
+See [recognition troubleshooting](recognition-troubleshooting.md) for where recordings and events are stored, how to replay them on the phone, and past causes (quiet input, language mismatch).
+
+## Keyboard language probe (issue #52)
+
+At each dictation start the app records which language signals it received, as a `LANGUAGE_PROBE` record with a `languageProbe` object. It holds only locale tags and ids: the IME path records the last input method subtype's locale and mode, the input method that owns it (its id), that input method's enabled subtype locales and the editor's `hintLocales`. The activity path records `EXTRA_LANGUAGE`, `EXTRA_LANGUAGE_PREFERENCE` and the calling package only when it is an installed input method, otherwise `other`, so receiving-app names stay out. `resolved` is `sk` or `en` when a signal named one of them. The latest probe of the running process is shown under **Last keyboard language check** on the Diagnostics screen even when collection is off; the record and a Logcat line (tag `LanguageProbe`) are written only when collection is on. The summary lists the latest ten probes. See [the language routing notes](ISSUE-52-language-routing-notes.md).
+
 ## Current audit and reporting limitations
 
 The [October 9 audit](audits/diagnostics-2026-10-09.md) maps symptoms to existing evidence, source/test references, privacy gaps, follow-up work, and reproducible scenarios. Its Android tests/lint were blocked by the host Java/Gradle setup; no device was connected and detailed-mode overhead remains unmeasured. The historical test results above do not verify the current revision.

@@ -8,12 +8,15 @@ import org.junit.Test
 class RecognitionLanguagePresentationTest {
     @Test
     fun multilingualGuidanceMatchesTheRuntimeLanguageControls() {
-        listOf("parakeet", "orukeet", "parakeet_redux").forEach {
+        listOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_redux").forEach {
             assertEquals(
                 "25 European languages. The model recognizes the spoken language automatically; no manual language selector is available.",
                 recognitionLanguageGuidance(requireNotNull(RecognitionModelCatalog.modelFor(it)))
             )
         }
+        val slovak = recognitionLanguageGuidance(requireNotNull(RecognitionModelCatalog.modelFor("parakeet_sk")))
+        assertTrue(slovak.startsWith("Tuned for Slovak."))
+        assertTrue(slovak.contains("including English, may be lower"))
         assertEquals(
             "28 languages and Auto-detect. Choose a recognition language or Auto-detect.",
             recognitionLanguageGuidance(RecognitionModelCatalog.nemotronMultilingual)

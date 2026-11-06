@@ -82,6 +82,11 @@ import org.futo.voiceinput.recognition.RecognitionModelSelection
 import org.futo.voiceinput.recognition.RecognitionModelReadiness
 import org.futo.voiceinput.recognition.RecognitionModelRepairReason
 import org.futo.voiceinput.recognition.updateRecognitionModelSelection
+import org.futo.voiceinput.recognition.LanguageRouting
+import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
+import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
+import org.futo.voiceinput.settings.PARAKEET_KEEP_TWO_WARM
+import org.futo.voiceinput.settings.SettingToggleDataStoreItem
 
 @Composable
 private fun observeModelReadinessChanges(): Long {
@@ -522,8 +527,40 @@ fun ModelsScreen(
 
         }
 
+        LanguageRoutingSetting()
+        SettingToggleDataStoreItem(
+            title = stringResource(R.string.live_text_at_pauses_title),
+            dataStoreItem = useDataStore(LIVE_TEXT_AT_PAUSES),
+            subtitle = stringResource(R.string.live_text_at_pauses_description)
+        )
+        SettingToggleDataStoreItem(
+            title = stringResource(R.string.keep_two_models_loaded_title),
+            dataStoreItem = useDataStore(PARAKEET_KEEP_TWO_WARM),
+            subtitle = stringResource(R.string.keep_two_models_loaded_description)
+        )
         ManagedRecognitionModelCatalog()
     }
+}
+
+/** "Pick the model by language": usable only while the Slovak model is installed. */
+@Composable
+private fun LanguageRoutingSetting() {
+    val context = LocalContext.current
+    val revision = observeModelReadinessChanges()
+    val slovakInstalled = remember(revision) {
+        runCatching {
+            RecognitionModelLifecycle.create(context.filesDir, BuildConfig.BUNDLE_PARAKEET_MODEL)
+                .readiness(RecognitionModelSelection(runtimeId = LanguageRouting.SLOVAK_RUNTIME))?.isReady == true
+        }.getOrDefault(false)
+    }
+    val item = useDataStore(ROUTE_BY_LANGUAGE)
+    SettingToggleDataStoreItem(
+        title = stringResource(R.string.route_by_language_title),
+        dataStoreItem = item,
+        subtitle = stringResource(if (slovakInstalled) R.string.route_by_language_description
+            else R.string.route_by_language_needs_slovak),
+        disabled = !slovakInstalled
+    )
 }
 
 @Composable

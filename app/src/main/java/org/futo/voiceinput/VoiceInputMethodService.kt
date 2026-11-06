@@ -169,6 +169,8 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
         override val liveBenchmarkSession get() = org.futo.voiceinput.benchmark.LiveBenchmark.forEntry(
             "ime", currentInputEditorInfo?.packageName == packageName)
         override val compact: Boolean = true
+        override fun probeKeyboardLanguage() = org.futo.voiceinput.diagnostics.KeyboardLanguageProbe
+            .fromInputMethod(this@VoiceInputMethodService, currentInputEditorInfo)
         override val context: Context
             get() = this@VoiceInputMethodService
         override val lifecycleScope: LifecycleCoroutineScope

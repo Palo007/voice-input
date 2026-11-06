@@ -37,7 +37,7 @@ data class BenchmarkModel(val id: String, val name: String, val managed: Recogni
             "name" to name, "runtime" to (model?.runtimeId ?: "whisper_ggml"),
             "variant" to (model?.variantId ?: id), "version" to (model?.version ?: requireNotNull(whisper).ggml.digest),
             "artifacts" to (model?.artifacts?.joinToString { "${it.name}:${it.sha256}" } ?: requireNotNull(whisper).ggml.digest),
-            "language" to if (model?.runtimeId in setOf("parakeet", "orukeet", "parakeet_redux", "whistle")) "auto (recording language $language)" else language,
+            "language" to if (model?.runtimeId in setOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_sk", "parakeet_redux", "whistle")) "auto (recording language $language)" else language,
             "decoding" to "runtime default; Whisper beam search 5, no glossary",
             "runtimeVersions" to "Sherpa-ONNX ${BuildConfig.SHERPA_ONNX_VERSION}; Moonshine ${BuildConfig.MOONSHINE_RUNTIME_VERSION}; ExecuTorch 1.2.0; native runtime revision in app build"
         ) + if (model?.runtimeId == "whistle") mapOf(

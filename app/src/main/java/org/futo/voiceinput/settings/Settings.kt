@@ -124,6 +124,8 @@ val ENABLE_30S_LIMIT = SettingsKey(booleanPreferencesKey("enable_30s_limit"), fa
 enum class SpeechBackendType(val id: String) {
     Parakeet("parakeet"),
     Orukeet("orukeet"),
+    ParakeetUltra("parakeet_ultra"),
+    ParakeetSlovak("parakeet_sk"),
     ParakeetUnified("parakeet_unified"),
     ParakeetRedux("parakeet_redux"),
     Phonon("phonon"),
@@ -151,6 +153,17 @@ val COHERE_LANGUAGE = SettingsKey(stringPreferencesKey("cohere_language"), "en")
 val PARAKEET_KEEP_WARM = SettingsKey(booleanPreferencesKey("parakeet_keep_warm"), true)
 val PARAKEET_KEEP_WARM_TIMEOUT_MS =
     SettingsKey(longPreferencesKey("parakeet_keep_warm_timeout_ms"), 5 * 60 * 1000L)
+/**
+ * Keep up to two Parakeet engines loaded (for example Slovak and Ultra), so an SK | EN switch needs
+ * no reload. Each unloads after PARAKEET_KEEP_WARM_TIMEOUT_MS without use. Needs PARAKEET_KEEP_WARM. Off by default.
+ */
+val PARAKEET_KEEP_TWO_WARM = SettingsKey(booleanPreferencesKey("parakeet_keep_two_warm"), false)
+/** Pick the Slovak model or the selected model per recording from the SK | EN button. Off by default. */
+val ROUTE_BY_LANGUAGE = SettingsKey(booleanPreferencesKey("route_by_language"), false)
+/** Offline Parakeet models decode at pauses while recording and show that text live. Off by default. */
+val LIVE_TEXT_AT_PAUSES = SettingsKey(booleanPreferencesKey("live_text_at_pauses"), false)
+/** Remembered SK | EN choice ("sk" or "en"), the last manual tap on the dictation screen. */
+val DICTATION_LANGUAGE = SettingsKey(stringPreferencesKey("dictation_language"), "en")
 val PARAKEET_ENGINE_DIAGNOSTICS =
     SettingsKey(booleanPreferencesKey("parakeet_engine_diagnostics"), false)
 

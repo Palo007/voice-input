@@ -158,6 +158,8 @@ class RecognizeActivity : ComponentActivity() {
     private val recognizer = object : RecognizerView() {
         override val liveBenchmarkSession get() = org.futo.voiceinput.benchmark.LiveBenchmark.forEntry(
             "activity", callingActivity?.packageName == packageName)
+        override fun probeKeyboardLanguage() = org.futo.voiceinput.diagnostics.KeyboardLanguageProbe
+            .fromActivity(this@RecognizeActivity, intent, callingPackage ?: callingActivity?.packageName)
         override val context: Context
             get() = this@RecognizeActivity
         override val lifecycleScope: LifecycleCoroutineScope
