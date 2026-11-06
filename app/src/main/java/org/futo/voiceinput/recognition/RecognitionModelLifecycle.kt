@@ -20,6 +20,8 @@ import org.futo.voiceinput.diagnostics.DiagnosticConfiguration
 import org.futo.voiceinput.diagnostics.DiagnosticEvent
 import org.futo.voiceinput.diagnostics.DiagnosticMetric
 import org.futo.voiceinput.ml.RunState
+import org.futo.voiceinput.parakeet.ParakeetEngineManager
+import org.futo.voiceinput.parakeet.WARM_PARAKEET_RUNTIMES
 import org.futo.voiceinput.parakeet.acquireParakeetRuntime
 import org.futo.voiceinput.parakeet.releaseParakeetArtifacts
 import org.futo.voiceinput.parakeet.releaseParakeetRuntime
@@ -105,7 +107,7 @@ class RecognitionModelLifecycle(
         check(!benchmarkOwned && activeRuntimes.isEmpty() && synchronized(activeSessions) { activeSessions.isEmpty() }) {
             "Dictation or another comparison is active. Finish it before comparing models."
         }
-        releaseParakeetArtifacts("parakeet")
+        ParakeetEngineManager.forceClose()
         benchmarkOwned = true
         AutoCloseable { benchmarkOwned = false; runtimeChanges.update { it + 1 } }
     }
@@ -194,18 +196,20 @@ class RecognitionModelLifecycle(
     ): SpeechBackend = acquireRuntime(selection) {
         context.updateRecognitionModelSelection(selection)
         val runtime = selection.runtimeId.toSpeechBackendType()
-        val backend = when (runtime) {
-            SpeechBackendType.Parakeet -> acquireParakeetRuntime(context)
-            SpeechBackendType.WhisperGGML -> WhisperGGMLBackend(
+        val warm = runtime.id in WARM_PARAKEET_RUNTIMES
+        val backend = when {
+            warm -> acquireParakeetRuntime(context, runtime.id)
+            runtime == SpeechBackendType.WhisperGGML -> WhisperGGMLBackend(
                 callbacks.onStatusUpdate,
                 callbacks.onPartialDecode,
                 callbacks.forceLanguageProvider
             )
             else -> managedRecognitionBackend(context, selection.copy(runtimeId = runtime.id))
         }
-        if (selection.runtimeId != SpeechBackendType.Parakeet.id) {
-            models.firstOrNull { it.runtimeId == SpeechBackendType.Parakeet.id }?.let {
-                if (!modelInUse(it)) releaseParakeetArtifacts(SpeechBackendType.Parakeet.id)
+        if (!warm) {
+            // Free the warm Parakeet engine before another model needs the memory.
+            ParakeetEngineManager.warmRuntimeId()?.let { warmRuntime ->
+                if (models.none { it.runtimeId == warmRuntime && modelInUse(it) }) releaseParakeetArtifacts(warmRuntime)
             }
             backend.loadOrCloseOnFailure { load(context) }
         }

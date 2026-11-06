@@ -18,17 +18,34 @@ internal class ParakeetEngineLease(
     override suspend fun close() = Unit
 }
 
+/** Runtime ids whose engine is kept loaded between recordings. Only one is held at a time. */
+internal val WARM_PARAKEET_RUNTIMES = setOf("parakeet", "parakeet_ultra")
+
+private fun warmParakeetBackend(runtimeId: String): ParakeetBackend = when (runtimeId) {
+    "parakeet" -> ParakeetBackend()
+    "parakeet_ultra" -> parakeetUltraBackend()
+    else -> throw IllegalArgumentException("$runtimeId is not a warm Parakeet runtime")
+}
+
 object ParakeetEngineManager {
     private val mutex = Mutex()
     private var backend: ParakeetBackend? = null
+    private var backendRuntimeId: String? = null
     private var unloadJob: Job? = null
     private val activeLeaseIds = mutableSetOf<Long>()
     private var nextLeaseId = 0L
 
-    internal suspend fun acquire(context: Context): ParakeetEngineLease = mutex.withLock {
+    internal suspend fun acquire(context: Context, runtimeId: String = "parakeet"): ParakeetEngineLease = mutex.withLock {
         val startedAt = System.nanoTime()
         unloadJob?.cancel()
         unloadJob = null
+
+        if (backend != null && backendRuntimeId != runtimeId) {
+            // Two 0.6B engines would not fit next to each other on most phones. A lease still
+            // held for the old engine fails with "not loaded" instead of using freed memory.
+            activeLeaseIds.clear()
+            closeLocked()
+        }
 
         val current = backend
         if (current != null) {
@@ -38,10 +55,11 @@ object ParakeetEngineManager {
         }
 
         backend = null
-        val loadedBackend = ParakeetBackend().also {
+        val loadedBackend = warmParakeetBackend(runtimeId).also {
             it.load(context.applicationContext)
             it.logEngineAcquired(warm = false, elapsedMs = (System.nanoTime() - startedAt) / 1_000_000)
             backend = it
+            backendRuntimeId = runtimeId
         }
         newLease(loadedBackend)
     }
@@ -68,33 +86,38 @@ object ParakeetEngineManager {
         unloadJob?.cancel()
         unloadJob = null
         if (!keepWarm) {
-            backend?.close()
-            backend = null
+            closeLocked()
             return@withLock
         }
 
         unloadJob = scope.launch {
             delay(timeoutMs)
-            mutex.withLock {
-                backend?.close()
-                backend = null
-            }
+            mutex.withLock { closeLocked() }
         }
     }
 
-    suspend fun forceClose() = mutex.withLock {
+    /** Closes the warm engine. With [runtimeId], only if that runtime is the one loaded. */
+    suspend fun forceClose(runtimeId: String? = null) = mutex.withLock {
+        if (runtimeId != null && backend != null && backendRuntimeId != runtimeId) return@withLock
         unloadJob?.cancel()
         unloadJob = null
         activeLeaseIds.clear()
+        closeLocked()
+    }
+
+    private suspend fun closeLocked() {
         backend?.close()
         backend = null
+        backendRuntimeId = null
     }
 
     fun isWarm(): Boolean = backend != null
+
+    internal fun warmRuntimeId(): String? = backendRuntimeId
 }
 
-internal suspend fun acquireParakeetRuntime(context: Context): SpeechBackend =
-    ParakeetEngineManager.acquire(context)
+internal suspend fun acquireParakeetRuntime(context: Context, runtimeId: String = "parakeet"): SpeechBackend =
+    ParakeetEngineManager.acquire(context, runtimeId)
 
 internal suspend fun releaseParakeetRuntime(
     backend: SpeechBackend,
@@ -108,7 +131,7 @@ internal suspend fun releaseParakeetRuntime(
 }
 
 internal suspend fun releaseParakeetArtifacts(runtimeId: String): Boolean {
-    if (runtimeId != "parakeet") return false
-    ParakeetEngineManager.forceClose()
+    if (runtimeId !in WARM_PARAKEET_RUNTIMES) return false
+    ParakeetEngineManager.forceClose(runtimeId)
     return true
 }

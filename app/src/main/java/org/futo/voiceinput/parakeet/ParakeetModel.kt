@@ -53,8 +53,8 @@ fun Context.parakeetModelDir(): File =
     RecognitionModelStore(filesDir).modelDirectory(ParakeetModel.recognitionModel)
 
 suspend fun RecognitionModel.releaseRuntime() {
-    if (runtimeId == ParakeetModel.recognitionModel.runtimeId) {
-        ParakeetEngineManager.forceClose()
+    if (runtimeId in WARM_PARAKEET_RUNTIMES) {
+        ParakeetEngineManager.forceClose(runtimeId)
     }
 }
 
@@ -74,7 +74,7 @@ fun Context.isParakeetModelDownloaded(verifyHashes: Boolean = false): Boolean {
 }
 
 fun Context.deleteIncompleteParakeetModel() {
-    runBlocking { ParakeetEngineManager.forceClose() }
+    runBlocking { ParakeetEngineManager.forceClose(ParakeetModel.recognitionModel.runtimeId) }
     if (!isParakeetModelDownloaded()) {
         parakeetModelDir().deleteRecursively()
     }
