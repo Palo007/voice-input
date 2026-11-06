@@ -27,6 +27,16 @@ class ImeInsertionSessionTest {
         override fun finishComposition(): Boolean { composingStart = -1; composingEnd = -1; return true }
         override fun textBeforeCursor(max: Int): String? =
             if (available) text.substring(maxOf(0, minOf(start, end) - max), minOf(start, end)) else null
+        var rangeReplacements = 0
+        override fun replaceRange(start: Int, end: Int, text: String, cursor: Int): Boolean {
+            writes++
+            if (!accepts) return false
+            rangeReplacements++
+            this.text = this.text.replaceRange(start, end, text)
+            this.start = cursor
+            this.end = cursor
+            return true
+        }
         override fun edit(deleteBefore: Int, insert: String): Boolean {
             writes++
             if (!accepts) return false
@@ -328,5 +338,84 @@ class ImeInsertionSessionTest {
     @Test fun deleteWordReadsAWindowThatStartsInsideAnEmoji() {
         val plan = DictationEditing.plan("\uDE00" + "x".repeat(10), DictationEdit.DeleteWord)
         assertEquals(10, plan.deleteBefore)
+    }
+
+    @Test fun lowercaseChangesOnlyTheLetterAndKeepsTheCursor() {
+        val editor = Editor("Note: I went home. And then")
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.edit(DictationEdit.Lowercase) { })
+        assertEquals("Note: I went home. and then", editor.text)
+        assertEquals(editor.text.length, editor.start)
+        assertEquals(1, editor.rangeReplacements)
+        // The next tap goes further back and skips "I".
+        session.selectionChanged(19, 20, -1, -1)
+        session.selectionChanged(20, 20, -1, -1)
+        session.selectionChanged(27, 27, -1, -1)
+        assertTrue(session.edit(DictationEdit.Lowercase) { })
+        assertEquals("note: I went home. and then", editor.text)
+        assertTrue(session.edit(DictationEdit.Lowercase) { })
+        assertEquals("note: I went home. and then", editor.text)
+        assertTrue(session.finish("Done", "en"))
+        assertEquals("note: I went home. and then Done", editor.text)
+    }
+
+    @Test fun lowercaseWhileComposingCommitsLiveTextFirst() {
+        val editor = Editor()
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.partial("I said. Hello"))
+        var commits = 0
+        assertTrue(session.edit(DictationEdit.Lowercase) { commits++ })
+        assertEquals(1, commits)
+        assertEquals("I said. hello", editor.text)
+        assertTrue(session.partial("there"))
+        assertEquals("I said. hello there", editor.text)
+    }
+
+    @Test fun lowercaseWithoutOffsetsRewritesFromTheLetter() {
+        val editor = Editor("one Two three")
+        editor.extracted = false
+        assertTrue(ImeInsertionSession(editor).edit(DictationEdit.Lowercase) { })
+        assertEquals("one two three", editor.text)
+        assertEquals(0, editor.rangeReplacements)
+    }
+
+    @Test fun lowercaseLeavesASelectionAndCapitalFreeTextAlone() {
+        val editor = Editor("Keep This", 5, 9)
+        assertTrue(ImeInsertionSession(editor).edit(DictationEdit.Lowercase) { })
+        assertEquals("Keep This", editor.text)
+        val plain = Editor("all small USA I")
+        assertTrue(ImeInsertionSession(plain).edit(DictationEdit.Lowercase) { })
+        assertEquals("all small USA I", plain.text)
+        assertEquals(0, plain.writes)
+    }
+
+    @Test fun lateRangeAckFromLowercaseKeepsOwnershipOfNewLiveText() {
+        val editor = Editor("one Two")
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.edit(DictationEdit.Lowercase) { })
+        assertTrue(session.partial("three"))
+        assertEquals("one two three", editor.text)
+        session.selectionChanged(4, 5, -1, -1)
+        session.selectionChanged(7, 7, -1, -1)
+        session.selectionChanged(13, 13, 7, 13)
+        assertTrue(session.finish("three four", "en"))
+        assertEquals("one two three four", editor.text)
+    }
+
+    @Test fun noOpEditStillNoticesACursorMove() {
+        val editor = Editor("all small")
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.partial("words"))
+        assertTrue(session.edit(DictationEdit.Lowercase) { })
+        assertEquals("all small words", editor.text)
+        session.selectionChanged(3, 3, -1, -1)
+        assertFalse(session.partial("more"))
+    }
+
+    @Test fun lowercaseWithoutOffsetsOnlyRewritesNearbyText() {
+        val editor = Editor("Far " + "x".repeat(300))
+        editor.extracted = false
+        assertTrue(ImeInsertionSession(editor).edit(DictationEdit.Lowercase) { })
+        assertTrue(editor.text.startsWith("Far "))
     }
 }

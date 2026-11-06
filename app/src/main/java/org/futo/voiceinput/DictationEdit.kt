@@ -5,8 +5,13 @@ enum class DictationEdit(val repeats: Boolean) {
     DeleteCharacter(repeats = true),
     DeleteWord(repeats = true),
     QuestionMark(repeats = false),
-    Space(repeats = true)
+    Space(repeats = true),
+    /** Makes the nearest capitalized word before the cursor start with a small letter. */
+    Lowercase(repeats = false)
 }
+
+/** A letter [distance] UTF-16 units before the cursor, [length] units long, becomes [text]. */
+internal data class LowercaseTarget(val distance: Int, val length: Int, val text: String)
 
 /** Remove [deleteBefore] UTF-16 units before the cursor, then insert [insert]. */
 internal data class DictationEditPlan(val deleteBefore: Int, val insert: String) {
@@ -20,6 +25,8 @@ internal data class DictationEditPlan(val deleteBefore: Int, val insert: String)
 internal object DictationEditing {
     /** How much text before the cursor is read to plan an edit. A longer word takes another tap. */
     const val CONTEXT_CHARS = 256
+    /** Lowercasing looks back any distance, within what the editor returns. */
+    const val LOWERCASE_CONTEXT_CHARS = 4096
 
     /** Plan for an empty selection. A non-empty selection is replaced by [selectionReplacement]. */
     fun plan(window: String, edit: DictationEdit): DictationEditPlan {
@@ -28,11 +35,54 @@ internal object DictationEditing {
         return planWhole(before, edit)
     }
 
+    /** Text read for [edit]; see [CONTEXT_CHARS] and [LOWERCASE_CONTEXT_CHARS]. */
+    fun contextChars(edit: DictationEdit): Int =
+        if (edit == DictationEdit.Lowercase) LOWERCASE_CONTEXT_CHARS else CONTEXT_CHARS
+
+    /**
+     * The capital letter to make small: the first letter of the nearest word before the cursor
+     * that starts with a capital and has no other capitals. Skips all-caps and mixed words such as
+     * "USA" or "iPhone", and the pronoun "I" (also in "I'm"). Each tap moves one word further back,
+     * because the word changed last no longer starts with a capital.
+     */
+    fun lowercaseTarget(window: String): LowercaseTarget? {
+        // A full window may start inside a word ("Phone" of "iPhone"); such a word is not judged.
+        val truncated = window.length >= LOWERCASE_CONTEXT_CHARS
+        val skipped = if (window.isNotEmpty() && window[0].isLowSurrogate()) 1 else 0
+        val text = window.substring(skipped)
+        var i = text.length
+        while (i > 0) {
+            if (!isWordPart(text.codePointBefore(i))) { i -= Character.charCount(text.codePointBefore(i)); continue }
+            val end = i
+            while (i > 0 && isWordPart(text.codePointBefore(i))) i -= Character.charCount(text.codePointBefore(i))
+            if (i == 0 && truncated) return null
+            val word = text.substring(i, end)
+            val first = word.codePointAt(0)
+            val capitals = word.codePoints().filter { Character.isUpperCase(it) || Character.isTitleCase(it) }.count()
+            if (word != "I" && capitals == 1L && (Character.isUpperCase(first) || Character.isTitleCase(first))) {
+                val lower = Character.toLowerCase(first)
+                if (lower != first) {
+                    return LowercaseTarget(text.length - i, Character.charCount(first), String(Character.toChars(lower)))
+                }
+            }
+        }
+        return null
+    }
+
+    private fun isWordPart(cp: Int): Boolean = Character.isLetterOrDigit(cp) || when (Character.getType(cp)) {
+        Character.NON_SPACING_MARK.toInt(), Character.COMBINING_SPACING_MARK.toInt() -> true
+        else -> false
+    }
+
     private fun planWhole(before: String, edit: DictationEdit): DictationEditPlan = when (edit) {
         DictationEdit.DeleteCharacter -> DictationEditPlan(before.length - previousCharacterStart(before, before.length), "")
         DictationEdit.DeleteWord -> DictationEditPlan(before.length - previousWordStart(before), "")
         DictationEdit.QuestionMark -> DictationEditPlan(before.length - questionMarkStart(before), "?")
         DictationEdit.Space -> DictationEditPlan(0, " ")
+        // Rewrites the text from the letter to the cursor; used only without absolute offsets.
+        DictationEdit.Lowercase -> lowercaseTarget(before)?.let {
+            DictationEditPlan(it.distance, it.text + before.substring(before.length - it.distance + it.length))
+        } ?: DictationEditPlan(0, "")
     }
 
     /** Like a keyboard: deleting removes the selection, inserting replaces it. */
@@ -40,6 +90,7 @@ internal object DictationEditing {
         DictationEdit.DeleteCharacter, DictationEdit.DeleteWord -> ""
         DictationEdit.QuestionMark -> "?"
         DictationEdit.Space -> " "
+        DictationEdit.Lowercase -> error("Lowercase leaves a selection unchanged")
     }
 
     /**

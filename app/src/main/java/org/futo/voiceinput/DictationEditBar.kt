@@ -8,7 +8,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -47,36 +50,59 @@ import org.futo.voiceinput.theme.Typography
 private const val EDIT_REPEAT_DELAY_MS = 400L
 private const val EDIT_REPEAT_INTERVAL_MS = 75L
 
-/** Delete character, delete word, "?" and space for the IME dictation screen. */
+/**
+ * Editing buttons for the IME dictation screen. Two rows of small buttons ("Aa→a", "?", delete
+ * character; a wide space bar) and a tall, highlighted delete-word button at the edge for the thumb.
+ */
 @Composable
-fun DictationEditBar(onEdit: (DictationEdit) -> Unit) {
+fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).testTag("dictation-edit-bar"),
-        horizontalArrangement = Arrangement.Center
+        modifier = modifier.height(IntrinsicSize.Min).testTag("dictation-edit-bar"),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_character_short),
-            stringResource(R.string.dictation_edit_delete_character), backspaceIcon = true, onEdit)
-        DictationEditButton(DictationEdit.DeleteWord, stringResource(R.string.dictation_edit_word_short),
-            stringResource(R.string.dictation_edit_delete_word), backspaceIcon = true, onEdit)
-        DictationEditButton(DictationEdit.QuestionMark, "?",
-            stringResource(R.string.dictation_edit_question_mark), backspaceIcon = false, onEdit)
-        DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space_short),
-            stringResource(R.string.dictation_edit_space), backspaceIcon = false, onEdit)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                DictationEditButton(DictationEdit.Lowercase, stringResource(R.string.dictation_edit_lowercase),
+                    onEdit, Modifier.weight(1f)) { EditLabel(stringResource(R.string.dictation_edit_lowercase_short)) }
+                DictationEditButton(DictationEdit.QuestionMark, stringResource(R.string.dictation_edit_question_mark),
+                    onEdit, Modifier.weight(1f)) { EditLabel("?") }
+                DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
+                    onEdit, Modifier.weight(1f)) { BackspaceIcon(18) }
+            }
+            DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space),
+                onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
+        }
+        Spacer(Modifier.width(6.dp))
+        DictationEditButton(DictationEdit.DeleteWord, stringResource(R.string.dictation_edit_delete_word),
+            onEdit, Modifier.width(80.dp).fillMaxHeight(), prominent = true) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                BackspaceIcon(24)
+                EditLabel(stringResource(R.string.dictation_edit_word_short))
+            }
+        }
     }
 }
 
 @Composable
-private fun RowScope.DictationEditButton(
-    edit: DictationEdit, label: String, description: String, backspaceIcon: Boolean,
-    onEdit: (DictationEdit) -> Unit
+private fun BackspaceIcon(sizeDp: Int) {
+    Icon(painterResource(R.drawable.ic_backspace), contentDescription = null, modifier = Modifier.size(sizeDp.dp))
+}
+
+@Composable
+private fun EditLabel(text: String) {
+    Text(text, style = Typography.labelLarge, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+private fun DictationEditButton(
+    edit: DictationEdit, description: String, onEdit: (DictationEdit) -> Unit,
+    modifier: Modifier, prominent: Boolean = false, content: @Composable () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val currentOnEdit by rememberUpdatedState(onEdit)
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(if (prominent) 20.dp else 24.dp)
     Surface(
-        modifier = Modifier
-            .weight(1f)
-            .padding(horizontal = 2.dp)
+        modifier = modifier
             .heightIn(min = 48.dp)
             .clip(shape)
             .indication(interactionSource, ripple())
@@ -110,24 +136,18 @@ private fun RowScope.DictationEditButton(
                 onClick { currentOnEdit(edit); true }
             },
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        color = if (prominent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (prominent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         Row(
             modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (backspaceIcon) {
-                Icon(painterResource(R.drawable.ic_backspace), contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(label, style = Typography.labelLarge, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-        }
+        ) { content() }
     }
 }
 
-@Preview(widthDp = 280)
+@Preview(widthDp = 232)
 @Composable
 private fun DictationEditBarPreview() {
     DictationEditBar(onEdit = {})
