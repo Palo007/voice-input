@@ -65,6 +65,7 @@ import org.futo.voiceinput.settings.PERSONAL_DICTIONARY
 import org.futo.voiceinput.settings.SPEECH_BACKEND
 import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
 import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
+import org.futo.voiceinput.settings.EDIT_BUTTONS_WHILE_DICTATING
 import org.futo.voiceinput.settings.SpeechBackendType
 import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.parakeet.ParakeetEngineLease
@@ -306,6 +307,18 @@ abstract class RecordingSession {
     private val decodedSegments = mutableListOf<DecodedSegment>()
     /** First sample not yet transcribed by an earlier model; the final model decodes from here. Guarded by this. */
     private var segmentStart = 0
+    /**
+     * Dictation editing (EDIT_BUTTONS_WHILE_DICTATING): segments the editor accepted as live text,
+     * and segments the user made permanent by editing. Frozen segments are never sent again, so
+     * live and final text after an edit contain only newer segments. Guarded by this.
+     */
+    private var shownSegments = 0
+    private var frozenSegments = 0
+    private var editedWhileDictating = false
+    /** Editing buttons are shown for this dictation; transcript cleanup is then skipped. Written in create(). */
+    @Volatile private var dictationEditing = false
+    /** Set by the host when it can apply edits to a target field (the IME). */
+    @Volatile var dictationEditingHost = false
 
     @Synchronized
     private fun clearCapturedSamples() {
@@ -313,6 +326,8 @@ abstract class RecordingSession {
         waveform.clear()
         decodedSegments.clear()
         segmentStart = 0
+        shownSegments = 0
+        frozenSegments = 0
     }
 
     @Synchronized
@@ -346,6 +361,37 @@ abstract class RecordingSession {
     protected abstract fun failed(error: Throwable)
     protected abstract fun languageDetected(result: String)
     protected abstract fun partialResult(result: String)
+    /** Live text at pauses; returns true when the editor accepted it. */
+    protected open fun livePartialResult(result: String): Boolean {
+        partialResult(result)
+        return false
+    }
+    /** Whether this dictation shows the editing buttons. Called on the main thread. */
+    protected open fun dictationEditingChanged(enabled: Boolean) {}
+
+    /** The editing buttons apply to this dictation. Main thread. */
+    val isDictationEditingActive: Boolean get() = dictationEditing
+
+    /**
+     * Once the host has committed the live text, before it applies an edit: the segments shown so
+     * far become permanent. Call on the main thread. False when editing is not active for this dictation.
+     */
+    fun freezeLiveText(): Boolean = synchronized(this) {
+        if (!dictationEditing) return false
+        frozenSegments = maxOf(frozenSegments, shownSegments)
+        editedWhileDictating = true
+        true
+    }
+
+    /** Sends the decoded segments after the frozen ones as live text. Main thread. */
+    private fun deliverLiveText() {
+        val (text, count) = synchronized(this) {
+            SwitchSegments.join(decodedSegments.drop(frozenSegments).map { it.text }) to decodedSegments.size
+        }
+        if (livePartialResult(PersonalVocabulary.apply(text, personalVocabulary))) {
+            synchronized(this) { shownSegments = maxOf(shownSegments, count) }
+        }
+    }
     protected abstract fun decodingStatus(status: RunState)
 
     protected abstract fun loading()
@@ -456,6 +502,9 @@ abstract class RecordingSession {
             routingLanguage = null
             switchableRuntimes = null
             modelSessionJob = null
+            dictationEditing = false
+            // Kept across the capture start, so an edit made while the model loads still counts.
+            editedWhileDictating = false
         }
         recorderJobToJoin?.cancel()
         modelJobToJoin?.cancel()
@@ -882,6 +931,14 @@ abstract class RecordingSession {
                 DictationLanguage.values().mapNotNull { routedSelection(it) }.distinct()
                     .filter { isInstalled(it) }.map { it.runtimeId }.toSet()
             } else null
+            // Editing needs segments that never change: offline Parakeet with live text at pauses,
+            // for every model the SK | EN button may route to.
+            val runtimes = if (routingAvailable) DictationLanguage.values().mapNotNull { routedSelection(it)?.runtimeId }
+                else listOf(base.runtimeId)
+            dictationEditing = dictationEditingHost && liveBenchmarkSession == null &&
+                context.getSetting(EDIT_BUTTONS_WHILE_DICTATING) && context.getSetting(LIVE_TEXT_AT_PAUSES) &&
+                runtimes.isNotEmpty() && runtimes.all { it in PauseChunker.OFFLINE_PARAKEET_RUNTIMES }
+            dictationEditingChanged(dictationEditing)
             // The model checks below use the language chosen so far; a tap meanwhile is committed after them.
             val selection = if (liveBenchmarkSession != null) base else routedSelection(dictationLanguage) ?: base
             val backendType = selection.runtimeId.toSpeechBackendType()
@@ -1407,9 +1464,8 @@ abstract class RecordingSession {
                 } ?: continue
                 report?.partial(shown.length)
                 withContext(Dispatchers.Main) {
-                    if (generation == recognitionGeneration) {
-                        partialResult(PersonalVocabulary.apply(shown, personalVocabulary))
-                    }
+                    // Rebuilt here: an edit may have frozen segments since this piece was decoded.
+                    if (generation == recognitionGeneration) deliverLiveText()
                 }
             }
         }
@@ -1594,11 +1650,14 @@ abstract class RecordingSession {
         yield()
         var validEmpty = false
         var transcriptCapture: S1MiniTranscriptCapture? = null
+        val editing = dictationEditing
+        var finalTail = ""
         val text = run {
             val recognitionStarted = SystemClock.elapsedRealtime()
             report?.event(DiagnosticEvent.RECOGNITION_STARTED,
                 mapOf(DiagnosticMetric.AUDIO_MS to sampleCount.toLong() * 1000 / AUDIO_SAMPLE_RATE))
-            val rawText = SwitchSegments.join(earlierSegments.map { it.text } + finalizeRecording())
+            finalTail = finalizeRecording()
+            val rawText = SwitchSegments.join(earlierSegments.map { it.text } + finalTail)
             liveBenchmarkSession?.raw(rawText)
             if (liveBenchmarkSession != null) return@run rawText
             report?.event(DiagnosticEvent.RECOGNITION_FINISHED, mapOf(
@@ -1606,6 +1665,9 @@ abstract class RecordingSession {
                 DiagnosticMetric.CHARACTERS to rawText.length.toLong()),
                 configuration = DiagnosticConfiguration(language = runBackend.detectedLanguage))
             saveBackupTranscript(savedAudioId, rawText)
+            // Cleanup would rewrite the whole utterance, but text before an edit is already final.
+            // Delivery below drops the frozen segments.
+            if (editing) return@run rawText
             val finalized = TranscriptFinalizer.clean(context, rawText, backendType,
                 runBackend.detectedLanguage, cleanupLanguage, personalVocabulary, report,
                 onCleaning = { withContext(Dispatchers.Main) { cleaning() } })
@@ -1633,15 +1695,22 @@ abstract class RecordingSession {
             withContext(Dispatchers.Main) {
                 if (runGeneration != recognitionGeneration) return@withContext
                 runBackend.detectedLanguage?.let(::languageDetected)
-                if (text.isBlank() && !validEmpty) {
+                // Read now: the user may still edit during decoding, which freezes more segments.
+                val (deliverText, edited) = if (!editing) text to false else synchronized(this@RecordingSession) {
+                    PersonalVocabulary.apply(SwitchSegments.join(
+                        earlierSegments.drop(frozenSegments).map { it.text } + finalTail), personalVocabulary) to
+                        editedWhileDictating
+                }
+                // After an edit, an empty rest just ends the dictation.
+                if (deliverText.isBlank() && !validEmpty && !edited) {
                     delivery = S1MiniTranscriptDelivery.Prepared
                     report?.event(DiagnosticEvent.NO_SPEECH)
                     failRecognition(NoSpeechRecognizedException(), runGeneration)
                 } else {
                     report?.event(DiagnosticEvent.RESULT_READY,
-                        mapOf(DiagnosticMetric.CHARACTERS to text.length.toLong()))
+                        mapOf(DiagnosticMetric.CHARACTERS to deliverText.length.toLong()))
                     delivery = S1MiniTranscriptDelivery.Rejected
-                    delivery = if (finished(text)) S1MiniTranscriptDelivery.Accepted else S1MiniTranscriptDelivery.Rejected
+                    delivery = if (finished(deliverText)) S1MiniTranscriptDelivery.Accepted else S1MiniTranscriptDelivery.Rejected
                 }
             }
         } finally {

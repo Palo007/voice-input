@@ -351,6 +351,15 @@
     <string name="route_by_language_description">Shows an SK | EN button on the dictation screen. SK uses Parakeet TDT V3 Slovak; EN uses your selected model. Only one model is kept in memory, so the first dictation after switching between SK and EN takes a few seconds longer while the other model loads. Your selected model does not change.</string>
     <string name="live_text_at_pauses_title">Live text at pauses</string>
     <string name="live_text_at_pauses_description">For Parakeet TDT V3, Orukeet, Parakeet Ultra and the Slovak model. While you speak, each part that ends with a short pause is transcribed and shown, so after Stop only the last part is left. Uses more battery while recording. Each part is transcribed on its own, so words across a pause may come out slightly differently than with this off.</string>
+    <string name="edit_buttons_while_dictating_title">Editing buttons while dictating</string>
+    <string name="edit_buttons_while_dictating_description">Needs Live text at pauses and Parakeet TDT V3, Orukeet, Parakeet Ultra or the Slovak model (with SK | EN, both sides). The keyboard dictation screen then shows buttons to delete a character or a word, and to type \"?\" or a space. A tap makes the text recognized so far permanent, and new speech is added after it. Transcript cleanup (S1 and Harper) is off for these dictations.</string>
+    <string name="dictation_edit_delete_character">Delete one character</string>
+    <string name="dictation_edit_delete_word">Delete one word</string>
+    <string name="dictation_edit_question_mark">Type a question mark</string>
+    <string name="dictation_edit_space">Type a space</string>
+    <string name="dictation_edit_character_short">Char</string>
+    <string name="dictation_edit_word_short">Word</string>
+    <string name="dictation_edit_space_short">Space</string>
     <string name="keep_two_models_loaded_title">Keep two models loaded</string>
     <string name="keep_two_models_loaded_description">With the SK | EN button, keeps both the Slovak model and your selected Parakeet model in memory, so switching language is instant, also while you speak. Each model is unloaded 5 minutes after its last use. Needs about 1.5 to 2 GB of free memory; on phones with little RAM, Android may close the app in the background.</string>
     <string name="route_by_language_needs_slovak">Download Parakeet TDT V3 Slovak first. Then this shows an SK | EN button on the dictation screen: SK uses the Slovak model, EN uses your selected model.</string>

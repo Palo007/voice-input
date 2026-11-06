@@ -85,6 +85,7 @@ import org.futo.voiceinput.recognition.updateRecognitionModelSelection
 import org.futo.voiceinput.recognition.LanguageRouting
 import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
 import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
+import org.futo.voiceinput.settings.EDIT_BUTTONS_WHILE_DICTATING
 import org.futo.voiceinput.settings.PARAKEET_KEEP_TWO_WARM
 import org.futo.voiceinput.settings.SettingToggleDataStoreItem
 
@@ -532,6 +533,11 @@ fun ModelsScreen(
             title = stringResource(R.string.live_text_at_pauses_title),
             dataStoreItem = useDataStore(LIVE_TEXT_AT_PAUSES),
             subtitle = stringResource(R.string.live_text_at_pauses_description)
+        )
+        SettingToggleDataStoreItem(
+            title = stringResource(R.string.edit_buttons_while_dictating_title),
+            dataStoreItem = useDataStore(EDIT_BUTTONS_WHILE_DICTATING),
+            subtitle = stringResource(R.string.edit_buttons_while_dictating_description)
         )
         SettingToggleDataStoreItem(
             title = stringResource(R.string.keep_two_models_loaded_title),

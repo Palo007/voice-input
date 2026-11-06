@@ -293,7 +293,8 @@ fun ColumnScope.PartialDecodingResult(text: String = "I am speaking [...]") {
 fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
     onFinish: () -> Unit = {},
     dictationLanguage: DictationLanguage? = null, onDictationLanguage: (DictationLanguage) -> Unit = {},
-    dictationLanguageLocked: Boolean = false, onWaveformDrawn: () -> Unit = {}) {
+    dictationLanguageLocked: Boolean = false, onEdit: ((DictationEdit) -> Unit)? = null,
+    onWaveformDrawn: () -> Unit = {}) {
     if (state.phase == RecognitionUiPhase.Inactive) return
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         if (state.isRecording) {
@@ -315,6 +316,8 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
         } else {
             RecognizeLoadingCircle(state.statusText ?: stringResource(R.string.initializing))
         }
+        // Also while loading and after Stop: the dictation screen is still open then.
+        onEdit?.let { DictationEditBar(it) }
         RecognitionModelCaption(state.modelName)
         if (dictationLanguage != null &&
             (state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording)) {
@@ -453,6 +456,22 @@ abstract class RecognizerView {
     /** True while recording with a live-text model on either side; the button is then disabled. */
     private var dictationLanguageLocked by mutableStateOf(false)
 
+    /** True when this host has a target field for the editing buttons (the IME). */
+    protected open val supportsDictationEditing: Boolean = false
+    /**
+     * Applies [edit] in the target field. [committed] must run once composing live text has been
+     * committed as it stands, before the edit itself.
+     */
+    protected open fun applyDictationEdit(edit: DictationEdit, committed: () -> Unit): Boolean = false
+    /** The editing buttons are shown for this dictation (EDIT_BUTTONS_WHILE_DICTATING and a supported model). */
+    private var dictationEditing by mutableStateOf(false)
+
+    private fun dictationEdit(edit: DictationEdit) {
+        // Committing live text is only safe while the recognizer will stop resending it.
+        if (!dictationEditing || !recognizer.isDictationEditingActive) return
+        applyDictationEdit(edit) { recognizer.freezeLiveText() }
+    }
+
     /** Language signals from the keyboard or the calling app; locale tags only. */
     protected open fun probeKeyboardLanguage(): DiagnosticLanguageProbe? = null
 
@@ -498,7 +517,8 @@ abstract class RecognizerView {
             ) {
                 RecognitionContent(state, compact = compact, onFinish = { finishRecognizerIfRecording() },
                     dictationLanguage = dictationLanguage, onDictationLanguage = ::selectDictationLanguage,
-                    dictationLanguageLocked = dictationLanguageLocked) {
+                    dictationLanguageLocked = dictationLanguageLocked,
+                    onEdit = if (dictationEditing) ::dictationEdit else null) {
                     if (firstWaveformFrame && state.bars.isNotEmpty()) {
                         firstWaveformFrame = false
                         recognizer.waveformDrawn()
@@ -625,6 +645,16 @@ abstract class RecognizerView {
         override fun partialResult(result: String) {
             sendPartialResult(result)
             presentation = presentation.partial(result)
+        }
+
+        override fun livePartialResult(result: String): Boolean {
+            val accepted = sendPartialResult(result)
+            presentation = presentation.partial(result)
+            return accepted
+        }
+
+        override fun dictationEditingChanged(enabled: Boolean) {
+            dictationEditing = enabled
         }
 
         override fun decodingStatus(status: RunState) {
@@ -782,6 +812,7 @@ abstract class RecognizerView {
 
     fun reset() {
         presentation = presentation.end()
+        dictationEditing = false
         detectedLanguage = null
         recognizer.reset()
     }
@@ -791,6 +822,7 @@ abstract class RecognizerView {
         startSoundId = soundPool.load(this.context, R.raw.start, 0)
         cancelSoundId = soundPool.load(this.context, R.raw.cancel, 0)
 
+        recognizer.dictationEditingHost = supportsDictationEditing
         lifecycleScope.launch {
             recognizer.liveBenchmarkSession = liveBenchmarkSession
             loadSettings()

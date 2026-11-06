@@ -162,6 +162,12 @@ val PARAKEET_KEEP_TWO_WARM = SettingsKey(booleanPreferencesKey("parakeet_keep_tw
 val ROUTE_BY_LANGUAGE = SettingsKey(booleanPreferencesKey("route_by_language"), false)
 /** Offline Parakeet models decode at pauses while recording and show that text live. Off by default. */
 val LIVE_TEXT_AT_PAUSES = SettingsKey(booleanPreferencesKey("live_text_at_pauses"), false)
+/**
+ * Delete character, delete word, "?" and space buttons on the IME dictation screen, for offline
+ * Parakeet models with LIVE_TEXT_AT_PAUSES. An edit makes the live text so far permanent, and
+ * transcript cleanup is skipped for these dictations. Off by default.
+ */
+val EDIT_BUTTONS_WHILE_DICTATING = SettingsKey(booleanPreferencesKey("edit_buttons_while_dictating"), false)
 /** Remembered SK | EN choice ("sk" or "en"), the last manual tap on the dictation screen. */
 val DICTATION_LANGUAGE = SettingsKey(stringPreferencesKey("dictation_language"), "en")
 val PARAKEET_ENGINE_DIAGNOSTICS =

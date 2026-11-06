@@ -5,6 +5,10 @@ internal interface InsertionEditor {
     fun snapshot(): InsertionSnapshot?
     fun replace(text: String, composing: Boolean): Boolean
     fun finishComposition(): Boolean
+    /** Up to [max] UTF-16 units before the cursor, or null when the editor cannot say. */
+    fun textBeforeCursor(max: Int): String?
+    /** Deletes [deleteBefore] units before the cursor, then commits [insert] over the selection, as one edit. */
+    fun edit(deleteBefore: Int, insert: String): Boolean
 }
 
 internal class InsertionSnapshot(
@@ -66,7 +70,11 @@ internal class ImeInsertionSession(
     private var started = false
     private var composingStart = -1
     private var composingText: String? = null
-    private val pendingEnds = mutableListOf<Int>()
+    /** Selection updates our own writes will cause; editors may report them after a newer write. */
+    private data class Ack(val cursor: Int, val candidatesStart: Int, val candidatesEnd: Int)
+    private val pendingAcks = mutableListOf<Ack>()
+    /** Absolute cursor after the last edit while no live text composes; null when unknown. */
+    private var editCursor: Int? = null
 
     fun partial(text: String): Boolean = deliver(text, composing = true, language = null)
 
@@ -78,17 +86,72 @@ internal class ImeInsertionSession(
         if (composingText != null) editor.finishComposition()
         active = false
         composingText = null
-        pendingEnds.clear()
+        editCursor = null
+        pendingAcks.clear()
+    }
+
+    /**
+     * Applies [edit] at the cursor. Live text that is still composing is first committed as it
+     * stands, then [committed] runs, so the caller can stop sending that text again: later partial
+     * and final results then insert only newer text at the cursor, after the edit.
+     * Without ownership (the user moved the cursor or edited the field) the edit still applies to
+     * the field, but this session stays inactive, as before.
+     */
+    fun edit(edit: DictationEdit, committed: () -> Unit): Boolean {
+        val previous = composingText
+        if (previous != null && active && editor.snapshot()?.let(::ownsComposition) != true) active = false
+        // Also clears a stale composing span from an earlier IME, which some editors skip when deleting.
+        if (!editor.finishComposition()) return false
+        started = true
+        if (previous != null) {
+            if (active) addAck(Ack(composingStart + previous.length, -1, -1))
+            composingText = null
+        }
+        committed()
+        editCursor = null
+        val snapshot = editor.snapshot() ?: return false
+        val start = minOf(snapshot.selectionStart, snapshot.selectionEnd)
+        val plan = if (start != maxOf(snapshot.selectionStart, snapshot.selectionEnd)) {
+            // Even an empty replacement removes the selection.
+            DictationEditPlan(0, DictationEditing.selectionReplacement(edit))
+        } else {
+            DictationEditing.plan(editor.textBeforeCursor(DictationEditing.CONTEXT_CHARS) ?: return false, edit)
+                .also { if (it.isNoop) return true }
+        }
+        if (!editor.edit(plan.deleteBefore, plan.insert)) return false
+        if (snapshot.offset >= 0) {
+            val cursor = snapshot.offset + start - plan.deleteBefore + plan.insert.length
+            addAck(Ack(cursor, -1, -1))
+            editCursor = cursor
+        }
+        return true
+    }
+
+    private fun addAck(ack: Ack) {
+        pendingAcks.add(ack)
+        // Editors that batch notifications never report some writes; keep only recent ones.
+        if (pendingAcks.size > MAX_PENDING_ACKS) pendingAcks.removeAt(0)
     }
 
     fun selectionChanged(start: Int, end: Int, candidatesStart: Int, candidatesEnd: Int) {
-        val previous = composingText ?: return
         if (!active) return
-        val pending = pendingEnds.indexOf(end)
-        if (start == end && candidatesStart == composingStart && candidatesEnd == end &&
-            (end == composingStart + previous.length || pending >= 0)) {
-            // Editor notifications may acknowledge earlier successful writes after a newer one.
-            if (pending >= 0) pendingEnds.subList(0, pending + 1).clear()
+        val previous = composingText
+        if (previous == null) {
+            // After an edit the next live text goes in at the cursor, so a cursor move by the user
+            // ends ownership just as it does while live text composes.
+            val cursor = editCursor ?: return
+            val pending = if (start == end) pendingAcks.indexOf(Ack(end, candidatesStart, candidatesEnd)) else -1
+            if (pending >= 0) pendingAcks.subList(0, pending + 1).clear()
+            else if (start != cursor || end != cursor || candidatesStart != -1 || candidatesEnd != -1) active = false
+            return
+        }
+        val pending = if (start == end) pendingAcks.indexOf(Ack(end, candidatesStart, candidatesEnd)) else -1
+        val current = start == end && candidatesStart == composingStart && candidatesEnd == end &&
+            end == composingStart + previous.length
+        if (current || pending >= 0) {
+            // Editor notifications may acknowledge earlier successful writes (including edits that
+            // committed earlier live text) after a newer one.
+            if (pending >= 0) pendingAcks.subList(0, pending + 1).clear()
         } else {
             active = false
         }
@@ -132,7 +195,8 @@ internal class ImeInsertionSession(
         if (composing) {
             composingStart = snapshot.offset + from
             composingText = spaced
-            pendingEnds.add(composingStart + spaced.length)
+            editCursor = null
+            addAck(Ack(composingStart + spaced.length, composingStart, composingStart + spaced.length))
         } else {
             active = false
             composingText = null
@@ -147,6 +211,10 @@ internal class ImeInsertionSession(
         val to = from + previous.length
         return from >= 0 && to <= snapshot.text.length && snapshot.selectionStart == to &&
             snapshot.selectionEnd == to && snapshot.text.substring(from, to) == previous
+    }
+
+    private companion object {
+        const val MAX_PENDING_ACKS = 256
     }
 
     private fun needsSpace(left: Int, right: Int): Boolean {
