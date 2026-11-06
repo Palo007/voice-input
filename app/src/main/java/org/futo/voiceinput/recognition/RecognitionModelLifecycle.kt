@@ -54,7 +54,9 @@ data class RecognitionModelReadiness(
 data class RecognitionRuntimeCallbacks(
     val onStatusUpdate: (RunState) -> Unit,
     val onPartialDecode: (String) -> Unit,
-    val forceLanguageProvider: () -> String?
+    val forceLanguageProvider: () -> String?,
+    /** False while dictating into a private field: no personal vocabulary prompt (Whisper). */
+    val personalVocabularyAllowed: () -> Boolean = { true }
 )
 
 class RecognitionModelLifecycle(
@@ -208,7 +210,8 @@ class RecognitionModelLifecycle(
             runtime == SpeechBackendType.WhisperGGML -> WhisperGGMLBackend(
                 callbacks.onStatusUpdate,
                 callbacks.onPartialDecode,
-                callbacks.forceLanguageProvider
+                callbacks.forceLanguageProvider,
+                personalVocabularyAllowed = callbacks.personalVocabularyAllowed
             )
             else -> managedRecognitionBackend(context, selection.copy(runtimeId = runtime.id))
         }

@@ -57,7 +57,14 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import kotlinx.coroutines.launch
+import org.futo.voiceinput.commands.FieldProfile
+import org.futo.voiceinput.commands.LastDictationMemory
+import org.futo.voiceinput.commands.VoiceCommandOptions
 import org.futo.voiceinput.migration.scheduleModelMigrationJob
+import org.futo.voiceinput.settings.VOICE_COMMANDS_DESTRUCTIVE
+import org.futo.voiceinput.settings.VOICE_COMMANDS_ENABLED
+import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.parakeet.startParakeetModelDownloadActivity
 import org.futo.voiceinput.moonshine.startMoonshineModelDownloadActivity
 import org.futo.voiceinput.downloader.startRecognitionModelDownloadActivity
@@ -195,8 +202,11 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
             }
         }
 
+        override val privateTarget: Boolean
+            get() = currentInputEditorInfo?.let { FieldProfile.from(it.inputType, it.imeOptions).isPrivate } ?: false
+
         override fun sendResult(result: String, detectedLanguage: String?): Boolean {
-            if (inputSession.insertion?.finish(result, detectedLanguage) != true) return false
+            if (inputSession.insertion?.finish(result, commandLanguage ?: detectedLanguage) != true) return false
             runCatching { onCancel() }.onFailure {
                 org.futo.voiceinput.diagnostics.AppDiagnostics.event(
                     org.futo.voiceinput.diagnostics.DiagnosticEvent.KEYBOARD_SWITCH_FAILED, error = it)
@@ -205,7 +215,7 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
         }
 
         override fun sendPartialResult(result: String): Boolean {
-            return inputSession.insertion?.partial(result) ?: false
+            return inputSession.insertion?.partial(result, commandLanguage) ?: false
         }
 
         override fun decodingStarted() = Unit
@@ -300,33 +310,26 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
 
     override fun onStartInput(info: EditorInfo, restarting: Boolean) {
         super.onStartInput(info, restarting)
-        inputSession.startInput(ImeEditorKey(info.packageName, info.fieldId, info.inputType),
+        inputSession.startInput(ImeEditorKey(info.packageName, info.fieldId, info.inputType, info.imeOptions),
             currentInputConnection, restarting)
     }
 
     override fun onEvaluateFullscreenMode(): Boolean = false
 
+    /** Read asynchronously per input view; commands stay off until the settings have loaded. */
+    @Volatile private var commandOptions = VoiceCommandOptions()
+
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
 
-        when (info.inputType and InputType.TYPE_MASK_CLASS) {
-            InputType.TYPE_CLASS_NUMBER -> {
-                // number
-            }
-            InputType.TYPE_CLASS_DATETIME -> {
-                // date time ??
-            }
-            InputType.TYPE_CLASS_PHONE -> {
-                // phone number
-                // could add whisper prompt like "My phone number is "
-            }
-            InputType.TYPE_CLASS_TEXT -> {
-                // text :)
-                if(info.inputType == InputType.TYPE_TEXT_VARIATION_PASSWORD) {
-                    // ...
-                }
-            }
+        lifecycle.coroutineScope.launch {
+            val enabled = getSetting(VOICE_COMMANDS_ENABLED)
+            commandOptions = VoiceCommandOptions(enabled, enabled && getSetting(VOICE_COMMANDS_DESTRUCTIVE))
         }
+        // Commands, structured-field formatting and privacy guardrails follow the field type.
+        val field = FieldProfile.from(info.inputType, info.imeOptions)
+        val formatting = InsertionFormatting(field, { commandOptions }, LastDictationMemory.shared,
+            ImeEditorKey(info.packageName, info.fieldId, info.inputType, info.imeOptions))
 
         val connection = currentInputConnection
         val editor = connection?.let { InputConnectionInsertionEditor(it) { currentInputConnection === it } }
@@ -335,7 +338,7 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
         val prose = variation in setOf(InputType.TYPE_TEXT_VARIATION_NORMAL,
             InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE, InputType.TYPE_TEXT_VARIATION_LONG_MESSAGE,
             InputType.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT)
-        if (inputSession.startView(connection, editor, automaticSpacing = textClass && prose)) {
+        if (inputSession.startView(connection, editor, automaticSpacing = textClass && prose, formatting)) {
             recognizer.reset()
             recognizer.init()
         } else {

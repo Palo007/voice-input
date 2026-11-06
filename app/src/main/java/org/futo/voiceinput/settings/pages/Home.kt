@@ -152,6 +152,14 @@ fun HomeScreen(
             icon = painterResource(R.drawable.edit)
         )
 
+        NavigationItem(
+            title = stringResource(R.string.voice_commands_title),
+            subtitle = stringResource(R.string.voice_commands_subtitle),
+            style = NavigationItemStyle.Misc,
+            navigate = { navController.navigate(SettingsDestination.VoiceCommands.route) },
+            icon = painterResource(R.drawable.edit)
+        )
+
         SettingsSeparator(stringResource(R.string.settings_recording))
         NavigationItem(
             title = stringResource(R.string.recording_options),

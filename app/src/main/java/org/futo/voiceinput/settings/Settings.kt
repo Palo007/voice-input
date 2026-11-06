@@ -173,6 +173,10 @@ val RETRANSCRIBE_WHOLE_RECORDING = SettingsKey(booleanPreferencesKey("retranscri
  * transcript cleanup is skipped for these dictations. Off by default.
  */
 val EDIT_BUTTONS_WHILE_DICTATING = SettingsKey(booleanPreferencesKey("edit_buttons_while_dictating"), false)
+/** Spoken punctuation and layout commands in the keyboard ("comma", "new line"). Off by default. */
+val VOICE_COMMANDS_ENABLED = SettingsKey(booleanPreferencesKey("voice_commands_enabled"), false)
+/** "delete that" and "undo dictation"; also needs VOICE_COMMANDS_ENABLED. Off by default. */
+val VOICE_COMMANDS_DESTRUCTIVE = SettingsKey(booleanPreferencesKey("voice_commands_destructive"), false)
 /** Remembered SK | EN choice ("sk" or "en"), the last manual tap on the dictation screen. */
 val DICTATION_LANGUAGE = SettingsKey(stringPreferencesKey("dictation_language"), "en")
 val PARAKEET_ENGINE_DIAGNOSTICS =

@@ -19,7 +19,8 @@ class WhisperGGMLBackend internal constructor(
     private val onStatusUpdate: (RunState) -> Unit,
     private val onPartialDecode: (String) -> Unit,
     private val forceLanguageProvider: () -> String?,
-    private var engine: WhisperEngine? = null
+    private var engine: WhisperEngine? = null,
+    private val personalVocabularyAllowed: () -> Boolean = { true }
 ) : SpeechBackend {
     private var personalDictionary: String = ""
     private var beamSearch: Boolean = true
@@ -74,7 +75,7 @@ class WhisperGGMLBackend internal constructor(
     override suspend fun transcribe(samples: FloatArray): String {
         return engine?.run(
             samples = samples,
-            glossary = personalDictionary,
+            glossary = if (personalVocabularyAllowed()) personalDictionary else "",
             forceLanguage = forceLanguageProvider(),
             decodingMode = if (beamSearch) DecodingMode.BeamSearch5 else DecodingMode.Greedy
         ) ?: throw IllegalStateException("Whisper/GGML backend is not loaded")

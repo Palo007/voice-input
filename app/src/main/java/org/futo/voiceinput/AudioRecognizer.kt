@@ -320,6 +320,11 @@ abstract class RecordingSession {
     @Volatile private var dictationEditing = false
     /** Set by the host when it can apply edits to a target field (the IME). */
     @Volatile var dictationEditingHost = false
+    /**
+     * The target field is a password or asks for no personalized learning: no personal vocabulary,
+     * no audio history or saved transcript, no transcript-inclusive capture. Set by the host.
+     */
+    @Volatile var privateTarget = false
 
     @Synchronized
     private fun clearCapturedSamples() {
@@ -624,7 +629,8 @@ abstract class RecordingSession {
                             }
                         }
                     },
-                    forceLanguageProvider = { forcedLanguage }
+                    forceLanguageProvider = { forcedLanguage },
+                    personalVocabularyAllowed = { !privateTarget }
                 )
             )
             val published = synchronized(this) {
@@ -682,6 +688,8 @@ abstract class RecordingSession {
     }
 
     private var forcedLanguage: String? = null
+    /** The dictation language when known ("sk" or "en" from the SK | EN choice, or a forced language). */
+    val dictationLanguageTag: String? get() = routingLanguage ?: forcedLanguage
     fun forceLanguage(language: String?) {
         forcedLanguage = language
     }
@@ -945,7 +953,7 @@ abstract class RecordingSession {
             val backendType = selection.runtimeId.toSpeechBackendType()
             diagnostics?.end(DiagnosticEvent.SESSION_RESET)
             diagnosticSamplingJob?.cancel()
-            personalVocabulary = if (liveBenchmarkSession != null) "" else context.getSetting(PERSONAL_DICTIONARY)
+            personalVocabulary = if (liveBenchmarkSession != null || privateTarget) "" else context.getSetting(PERSONAL_DICTIONARY)
             val readiness = modelLifecycle.readiness(selection)
             selectedManagedModel = readiness?.model
             selectedModelName = modelCaption(readiness?.model, backendType)
@@ -1151,7 +1159,7 @@ abstract class RecordingSession {
                     val capture = try {
                         val store = context.audioHistory()
                         store.purge(context.getSetting(AUDIO_HISTORY_RETENTION_HOURS))
-                        if (liveBenchmarkSession == null && context.getSetting(AUDIO_HISTORY_ENABLED)) store.begin() else null
+                        if (liveBenchmarkSession == null && !privateTarget && context.getSetting(AUDIO_HISTORY_ENABLED)) store.begin() else null
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
@@ -1699,7 +1707,8 @@ abstract class RecordingSession {
                 runBackend.detectedLanguage, cleanupLanguage, personalVocabulary, report,
                 onCleaning = { withContext(Dispatchers.Main) { cleaning() } })
             validEmpty = finalized.validEmpty
-            transcriptCapture = finalized.capture
+            // Transcript-inclusive capture is history too; a private field keeps none.
+            transcriptCapture = finalized.capture.takeIf { !privateTarget }
             finalized.text
         }
 

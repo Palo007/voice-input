@@ -1,5 +1,10 @@
 package org.futo.voiceinput
 
+import org.futo.voiceinput.commands.DictationFormatter
+import org.futo.voiceinput.commands.FieldProfile
+import org.futo.voiceinput.commands.LastDictationMemory
+import org.futo.voiceinput.commands.VoiceCommandOptions
+
 /** The editor boundary. Snapshots are transient and must never be logged or persisted. */
 internal interface InsertionEditor {
     fun snapshot(): InsertionSnapshot?
@@ -20,7 +25,19 @@ internal class InsertionSnapshot(
     val offset: Int = 0
 )
 
-internal data class ImeEditorKey(val packageName: String?, val fieldId: Int, val inputType: Int)
+/** [imeOptions] is part of the key so a restart that turns a field private starts a new session. */
+internal data class ImeEditorKey(val packageName: String?, val fieldId: Int, val inputType: Int, val imeOptions: Int = 0)
+
+/**
+ * Voice commands and field formatting for one field. [options] is read on each delivery because
+ * settings load asynchronously. [memory] holds the last dictation for "delete that" under [key].
+ */
+internal class InsertionFormatting(
+    val field: FieldProfile,
+    val options: () -> VoiceCommandOptions,
+    val memory: LastDictationMemory,
+    val key: ImeEditorKey
+)
 
 /** Owns dictation across Android input callbacks, including view-only recreation. */
 internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit) {
@@ -36,11 +53,12 @@ internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit)
         this.connection = connection
     }
 
-    fun startView(connection: Any?, editor: InsertionEditor?, automaticSpacing: Boolean): Boolean {
+    fun startView(connection: Any?, editor: InsertionEditor?, automaticSpacing: Boolean,
+        formatting: InsertionFormatting? = null): Boolean {
         if (this.connection !== connection) cancel()
         this.connection = connection
         if (!needsInitialization) return false
-        insertion = editor?.let { ImeInsertionSession(it, automaticSpacing) }
+        insertion = editor?.let { ImeInsertionSession(it, automaticSpacing, formatting) }
         needsInitialization = false
         return true
     }
@@ -66,7 +84,8 @@ internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit)
 /** One utterance in one input connection, independent of the input view's lifetime. */
 internal class ImeInsertionSession(
     private val editor: InsertionEditor,
-    private val automaticSpacing: Boolean = true
+    private val automaticSpacing: Boolean = true,
+    private val formatting: InsertionFormatting? = null
 ) {
     private var active = true
     private var started = false
@@ -80,7 +99,8 @@ internal class ImeInsertionSession(
     /** Absolute cursor after the last edit while no live text composes; null when unknown. */
     private var editCursor: Int? = null
 
-    fun partial(text: String): Boolean = deliver(text, composing = true, language = null)
+    /** [language] selects the voice-command phrases; see [InsertionFormatting]. */
+    fun partial(text: String, language: String? = null): Boolean = deliver(text, composing = true, language)
 
     fun finish(text: String, language: String?): Boolean = deliver(text, composing = false, language)
 
@@ -107,6 +127,8 @@ internal class ImeInsertionSession(
         // Also clears a stale composing span from an earlier IME, which some editors skip when deleting.
         if (!editor.finishComposition()) return false
         started = true
+        // The field changed by hand; "delete that" must not remove an earlier dictation now.
+        formatting?.memory?.forget()
         if (previous != null) {
             if (active) addAck(Ack(composingStart + previous.length, -1, -1))
             composingText = null
@@ -215,19 +237,47 @@ internal class ImeInsertionSession(
             active = false
             return false
         }
-        if (text.isEmpty() && previous == null) {
-            active = false
+        // Formatting sees only the field text before the insertion point; it never leaves this method.
+        val formatted = formatting?.let {
+            DictationFormatter.format(text, snapshot.text.substring(0, from), it.field, it.options(), language,
+                final = !composing,
+                previousDictation = if (composing || it.field.isPrivate) null else it.memory.recall(it.key))
+        }
+        val output = formatted?.text ?: text
+        // Final only, and within the text read above. A selection is replaced as usual, without
+        // also deleting text before it.
+        val deleteBefore = if (previous == null && from != to) 0 else (formatted?.deleteBefore ?: 0).coerceIn(0, from)
+        val start = from - deleteBefore
+        if (output.isEmpty() && previous == null && deleteBefore == 0) {
+            // Live text that formats to nothing (only a command so far) leaves the field alone.
+            if (!composing) active = false
             return true
         }
-        val spaced = if (text.isNotEmpty() && automaticSpacing &&
+        val spaced = if (output.isNotEmpty() && automaticSpacing &&
             language?.substringBefore('-') !in setOf("zh", "ja", "th", "lo", "km", "my")) {
-            val before = if (from > 0) snapshot.text.codePointBefore(from) else -1
+            val before = if (start > 0) snapshot.text.codePointBefore(start) else -1
             val after = if (to < snapshot.text.length) snapshot.text.codePointAt(to) else -1
-            (if (needsSpace(before, text.codePointAt(0))) " " else "") + text +
-                (if (needsSpace(text.codePointBefore(text.length), after)) " " else "")
-        } else text
+            (if (needsSpace(before, output.codePointAt(0))) " " else "") + output +
+                (if (needsSpace(output.codePointBefore(output.length), after)) " " else "")
+        } else output
         if (composing && spaced == previous) return true
-        if (!editor.replace(spaced, composing)) return false
+        // An empty composing span is not kept by editors, which would look like a lost composition.
+        // Earlier live text stays until the final result replaces it.
+        if (composing && spaced.isEmpty()) return true
+        val written = when {
+            deleteBefore == 0 -> editor.replace(spaced, composing)
+            snapshot.offset >= 0 -> {
+                // commitText would replace a composing region instead of the range, so end it first.
+                (previous == null || editor.finishComposition()) && editor.replaceRange(
+                    snapshot.offset + start, snapshot.offset + to, spaced, snapshot.offset + start + spaced.length)
+            }
+            // Without offsets nothing composes; the text read before the cursor excludes a selection.
+            else -> editor.edit(deleteBefore, spaced)
+        }
+        if (!written) return false
+        if (!composing) formatting?.let {
+            if (it.field.isPrivate) it.memory.forget() else it.memory.remember(it.key, spaced)
+        }
         if (composing) {
             composingStart = snapshot.offset + from
             composingText = spaced

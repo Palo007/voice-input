@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.update
 import org.futo.voiceinput.R
 import org.futo.voiceinput.Status
 import org.futo.voiceinput.payments.BillingManager
+import org.futo.voiceinput.settings.pages.VoiceCommandsScreen
 import org.futo.voiceinput.settings.pages.AdvancedScreen
 import org.futo.voiceinput.settings.pages.AudioHistoryScreen
 import org.futo.voiceinput.settings.pages.CreditsScreen
@@ -162,6 +163,7 @@ fun SettingsMain(
         composable(SettingsDestination.Models.route) { ModelsScreen(settingsViewModel, navController) }
         composable(SettingsDestination.TranscriptCleanup.route) { TranscriptCleanupScreen(navController) }
         composable(SettingsDestination.PersonalDictionary.route) { PersonalDictionaryScreen(navController) }
+        composable(SettingsDestination.VoiceCommands.route) { VoiceCommandsScreen(navController) }
         composable(SettingsDestination.Diagnostics.route) { DiagnosticsScreen(navController) }
         composable(SettingsDestination.Input.route) { InputScreen(settingsViewModel, navController) }
         composable(SettingsDestination.Themes.route) { ThemeScreen(navController) }

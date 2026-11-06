@@ -22,7 +22,8 @@ internal class InputConnectionInsertionEditor(
             } else {
                 // These reads exclude the selection. Native commitText still replaces it normally.
                 // Unknown absolute positions disable composing updates, not final-only dictation.
-                val before = connection.getTextBeforeCursor(2, 0)?.toString().orEmpty()
+                // Enough before the cursor for field formatting and "delete that" to check earlier text.
+                val before = connection.getTextBeforeCursor(FALLBACK_BEFORE_CHARS, 0)?.toString().orEmpty()
                 val after = connection.getTextAfterCursor(2, 0)?.toString().orEmpty()
                 InsertionSnapshot(before + after, before.length, before.length, offset = -1)
             }
@@ -93,5 +94,9 @@ internal class InputConnectionInsertionEditor(
             // The connection may disappear while finishing input. Do not expose editor contents.
             false
         }
+    }
+
+    private companion object {
+        const val FALLBACK_BEFORE_CHARS = 1024
     }
 }

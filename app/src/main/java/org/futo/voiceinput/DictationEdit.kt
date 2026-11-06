@@ -63,17 +63,25 @@ internal object DictationEditing {
             }
             if (i == 0 && truncated) return null
             val word = text.substring(i, end)
-            val first = word.codePointAt(0)
-            val capitals = word.codePoints().filter { Character.isUpperCase(it) || Character.isTitleCase(it) }.count()
-            val pronounI = word == "I" || (word.length > 1 && word[0] == 'I' && word[1] in APOSTROPHES)
-            if (!pronounI && capitals == 1L && (Character.isUpperCase(first) || Character.isTitleCase(first))) {
-                val lower = Character.toLowerCase(first)
-                if (lower != first) {
-                    return LowercaseTarget(text.length - i, Character.charCount(first), String(Character.toChars(lower)))
-                }
+            if (isPlainCapitalized(word)) {
+                val first = word.codePointAt(0)
+                return LowercaseTarget(text.length - i, Character.charCount(first), String(Character.toChars(Character.toLowerCase(first))))
             }
         }
         return null
+    }
+
+    /**
+     * A word that starts with its only capital and can be lowercased: not "I" or "I'm", not all-caps
+     * or mixed ("USA", "iPhone"). Apostrophes and hyphens join a word ("O'Brien" has two capitals).
+     */
+    fun isPlainCapitalized(word: String): Boolean {
+        if (word.isEmpty()) return false
+        val first = word.codePointAt(0)
+        val capitals = word.codePoints().filter { Character.isUpperCase(it) || Character.isTitleCase(it) }.count()
+        val pronounI = word == "I" || (word.length > 1 && word[0] == 'I' && word[1] in APOSTROPHES)
+        return !pronounI && capitals == 1L && (Character.isUpperCase(first) || Character.isTitleCase(first)) &&
+            Character.toLowerCase(first) != first
     }
 
     private const val APOSTROPHES = "'\u2019\u02BC"

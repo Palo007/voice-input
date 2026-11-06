@@ -484,6 +484,10 @@ abstract class RecognizerView {
     /** True while recording with a live-text model on either side; the button is then disabled. */
     private var dictationLanguageLocked by mutableStateOf(false)
 
+    /** The target field is private (password or no personalized learning); see AudioRecognizer.privateTarget. */
+    protected open val privateTarget: Boolean get() = false
+    /** Language for voice-command phrases: the SK | EN or forced language, else the reported one. */
+    protected val commandLanguage: String? get() = recognizer.dictationLanguageTag ?: detectedLanguage
     /** True when this host has a target field for the editing buttons (the IME). */
     protected open val supportsDictationEditing: Boolean = false
     /**
@@ -851,6 +855,7 @@ abstract class RecognizerView {
         cancelSoundId = soundPool.load(this.context, R.raw.cancel, 0)
 
         recognizer.dictationEditingHost = supportsDictationEditing
+        recognizer.privateTarget = privateTarget
         lifecycleScope.launch {
             recognizer.liveBenchmarkSession = liveBenchmarkSession
             loadSettings()

@@ -11,6 +11,7 @@ enum class SettingsDestination(val route: String) {
     Models("models"),
     TranscriptCleanup("transcriptCleanup"),
     PersonalDictionary("personalDictionary"),
+    VoiceCommands("voiceCommands"),
     Diagnostics("diagnostics"),
     Input("input"),
     Themes("themes"),
