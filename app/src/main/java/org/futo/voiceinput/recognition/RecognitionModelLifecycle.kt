@@ -192,9 +192,11 @@ class RecognitionModelLifecycle(
     suspend fun load(
         context: Context,
         selection: RecognitionModelSelection,
-        callbacks: RecognitionRuntimeCallbacks
+        callbacks: RecognitionRuntimeCallbacks,
+        /** False for a per-recording language route, which must not change the saved model choice. */
+        persistSelection: Boolean = true
     ): SpeechBackend = acquireRuntime(selection) {
-        context.updateRecognitionModelSelection(selection)
+        if (persistSelection) context.updateRecognitionModelSelection(selection)
         val runtime = selection.runtimeId.toSpeechBackendType()
         val warm = runtime.id in WARM_PARAKEET_RUNTIMES
         val backend = when {

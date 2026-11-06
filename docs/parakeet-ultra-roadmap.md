@@ -95,7 +95,17 @@ Its options for steering the output are `hotwordsFile`, `blankPenalty`, and rule
 - It shares the warm engine slot with V3 and Ultra (`WARM_PARAKEET_RUNTIMES`). Only one is loaded at a time.
 - English cleanup (Harper, S1) is not applied to it unless English is detected or forced.
 - KInIT's model card says the other 24 languages get significantly worse. **Still to check on the phone:** English quality, Czech/Polish spellings in Slovak, and Stop-to-text time against V3 and Ultra (test plan in the notes).
-- If it is good in Slovak but weak in English, step 3's language choice could route Slovak to it and English to Ultra. But two engines in RAM is a lot for a phone; switching engines costs a cold load each time.
+- Device result: very good in Slovak, bad in English. So Slovak is now routed to it and English to the selected model (next section).
+
+## Step 4b: Route by dictation language: added on branch `codex/issue-52-language-routing`
+
+A "Pick the model by language" setting (off by default, needs the Slovak model) shows an SK | EN button on the dictation screen. SK uses `parakeet_sk`; EN uses the selected model (for example Ultra). The saved model choice is not changed. Still one warm engine: switching SK↔EN closes one engine and loads the other. Details: [ISSUE-52-language-routing-notes.md](ISSUE-52-language-routing-notes.md).
+
+**Relation to step 3:** step 4b chooses between two *models* with a manual (or keyboard-provided) language. Step 3 restricts *one* model's decoding to chosen languages and detects which one was spoken, with no model switch. They combine well:
+
+- Step 3's detected language could set the SK | EN choice automatically instead of the button. But the model must be chosen before decoding, so this only helps if detection is cheap (for example the encoder pass of the warm model) or applied to the next recording.
+- If step 3 makes Ultra good enough in Slovak with no Czech/Polish leaks, step 4b becomes unnecessary and the cold switch cost goes away.
+- The `routingLanguage` passed to the Harper and S1 gates is the same hook step 3's `detectedLanguage` would use.
 
 ## Step 5: Own fine-tuning (only if steps 3 and 4 aren't enough)
 
@@ -112,7 +122,7 @@ Its options for steering the output are `hotwordsFile`, `blankPenalty`, and rule
 
 ## Order and parallel work
 
-1 → 2 → 3, then 4 and idea 2 in either order, and 5 last.
+1 → 2 → 3, then 4 and idea 2 in either order, and 5 last. Step 4 and 4b are done ahead of step 3 because the Slovak fine-tune needed no decoder work.
 
 Step 3 should run in **its own fresh session, after step 2**, not in parallel with step 1:
 

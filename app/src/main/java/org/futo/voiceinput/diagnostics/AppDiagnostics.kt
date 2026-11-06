@@ -102,6 +102,22 @@ object AppDiagnostics {
         }.onFailure { dropped.incrementAndGet() }
     }
 
+    /** Latest keyboard language probe of this process, shown on the Diagnostics screen. */
+    @Volatile var lastLanguageProbe: Pair<Long, DiagnosticLanguageProbe>? = null
+        private set
+
+    fun languageProbe(probe: DiagnosticLanguageProbe) {
+        runCatching {
+            val safe = probe.sanitized()
+            lastLanguageProbe = System.currentTimeMillis() to safe
+            if (store?.policy()?.enabled == false) return
+            queue.execute {
+                runCatching { store?.record(DiagnosticEvent.LANGUAGE_PROBE, languageProbe = safe) }
+                    .onFailure { dropped.incrementAndGet() }
+            }
+        }.onFailure { dropped.incrementAndGet() }
+    }
+
     fun session(model: String? = null): DiagnosticSession? = runCatching { DiagnosticSession(model) }
         .onFailure { dropped.incrementAndGet() }.getOrNull()
 

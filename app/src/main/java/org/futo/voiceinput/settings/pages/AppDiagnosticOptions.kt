@@ -99,6 +99,19 @@ fun AppDiagnosticOptions() {
         disabled = busy,
         onClick = { clearOpen = true }
     ) { }
+    var probe by remember { mutableStateOf(AppDiagnostics.lastLanguageProbe) }
+    LaunchedEffect(Unit) {
+        while (true) { probe = AppDiagnostics.lastLanguageProbe; delay(1000) }
+    }
+    SettingItem(
+        title = stringResource(R.string.app_diagnostics_language_probe),
+        subtitle = probe?.let { (at, value) ->
+            stringResource(R.string.app_diagnostics_language_probe_value,
+                java.text.DateFormat.getTimeInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(at)),
+                value.describe())
+        } ?: stringResource(R.string.app_diagnostics_language_probe_none),
+        onClick = { }
+    ) { }
 
     if (notesOpen) AlertDialog(
         onDismissRequest = { if (!busy) notesOpen = false },

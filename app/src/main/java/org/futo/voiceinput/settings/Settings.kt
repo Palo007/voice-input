@@ -153,6 +153,10 @@ val COHERE_LANGUAGE = SettingsKey(stringPreferencesKey("cohere_language"), "en")
 val PARAKEET_KEEP_WARM = SettingsKey(booleanPreferencesKey("parakeet_keep_warm"), true)
 val PARAKEET_KEEP_WARM_TIMEOUT_MS =
     SettingsKey(longPreferencesKey("parakeet_keep_warm_timeout_ms"), 5 * 60 * 1000L)
+/** Pick the Slovak model or the selected model per recording from the SK | EN button. Off by default. */
+val ROUTE_BY_LANGUAGE = SettingsKey(booleanPreferencesKey("route_by_language"), false)
+/** Remembered SK | EN choice ("sk" or "en"), the last manual tap on the dictation screen. */
+val DICTATION_LANGUAGE = SettingsKey(stringPreferencesKey("dictation_language"), "en")
 val PARAKEET_ENGINE_DIAGNOSTICS =
     SettingsKey(booleanPreferencesKey("parakeet_engine_diagnostics"), false)
 

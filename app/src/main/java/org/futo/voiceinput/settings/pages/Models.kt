@@ -82,6 +82,9 @@ import org.futo.voiceinput.recognition.RecognitionModelSelection
 import org.futo.voiceinput.recognition.RecognitionModelReadiness
 import org.futo.voiceinput.recognition.RecognitionModelRepairReason
 import org.futo.voiceinput.recognition.updateRecognitionModelSelection
+import org.futo.voiceinput.recognition.LanguageRouting
+import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
+import org.futo.voiceinput.settings.SettingToggleDataStoreItem
 
 @Composable
 private fun observeModelReadinessChanges(): Long {
@@ -522,8 +525,30 @@ fun ModelsScreen(
 
         }
 
+        LanguageRoutingSetting()
         ManagedRecognitionModelCatalog()
     }
+}
+
+/** "Pick the model by language": usable only while the Slovak model is installed. */
+@Composable
+private fun LanguageRoutingSetting() {
+    val context = LocalContext.current
+    val revision = observeModelReadinessChanges()
+    val slovakInstalled = remember(revision) {
+        runCatching {
+            RecognitionModelLifecycle.create(context.filesDir, BuildConfig.BUNDLE_PARAKEET_MODEL)
+                .readiness(RecognitionModelSelection(runtimeId = LanguageRouting.SLOVAK_RUNTIME))?.isReady == true
+        }.getOrDefault(false)
+    }
+    val item = useDataStore(ROUTE_BY_LANGUAGE)
+    SettingToggleDataStoreItem(
+        title = stringResource(R.string.route_by_language_title),
+        dataStoreItem = item,
+        subtitle = stringResource(if (slovakInstalled) R.string.route_by_language_description
+            else R.string.route_by_language_needs_slovak),
+        disabled = !slovakInstalled
+    )
 }
 
 @Composable

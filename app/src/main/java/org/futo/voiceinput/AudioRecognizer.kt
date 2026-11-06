@@ -60,6 +60,7 @@ import org.futo.voiceinput.settings.PARAKEET_KEEP_WARM_TIMEOUT_MS
 import org.futo.voiceinput.settings.PARAKEET_USE_VAD
 import org.futo.voiceinput.settings.PERSONAL_DICTIONARY
 import org.futo.voiceinput.settings.SPEECH_BACKEND
+import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
 import org.futo.voiceinput.settings.SpeechBackendType
 import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.parakeet.ParakeetEngineLease
@@ -70,6 +71,8 @@ import org.futo.voiceinput.backend.prepareRecordingFinalization
 import org.futo.voiceinput.recognition.RecognitionModel
 import org.futo.voiceinput.recognition.RecognitionModelLifecycle
 import org.futo.voiceinput.recognition.RecognitionModelSelection
+import org.futo.voiceinput.recognition.DictationLanguage
+import org.futo.voiceinput.recognition.LanguageRouting
 import org.futo.voiceinput.recognition.RecognitionRuntimeCallbacks
 import org.futo.voiceinput.recognition.loadOrCloseOnFailure
 import org.futo.voiceinput.settings.toSpeechBackendType
@@ -419,6 +422,11 @@ abstract class RecordingSession {
             backendGeneration = -1L
             parakeetLease = null
             streamingAudio.reset()
+            baseSelection = null
+            sessionSelection = null
+            routingLanguage = null
+            switchableRuntimes = null
+            modelSessionJob = null
         }
         recorderJobToJoin?.cancel()
         modelJobToJoin?.cancel()
@@ -491,25 +499,23 @@ abstract class RecordingSession {
 
     internal suspend fun loadModelInner(
         loadBackend: suspend (Context, RecognitionModelSelection, RecognitionRuntimeCallbacks) -> SpeechBackend =
-            { context, selection, callbacks -> modelLifecycle.load(context, selection, callbacks) }
+            { context, selection, callbacks ->
+                // Dictation never writes the saved model choice; it only reads it (see language routing).
+                modelLifecycle.load(context, selection, callbacks, persistSelection = false)
+            }
     ) {
         val loadGeneration = recognitionGeneration
         val report = diagnostics
         val loadStarted = SystemClock.elapsedRealtime()
         try {
-            val selection = liveBenchmarkSession?.selection ?: RecognitionModelSelection(
-                runtimeId = context.getSetting(SPEECH_BACKEND),
-                moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
-                nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
-                asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
-            )
+            val selection = liveBenchmarkSession?.selection ?: sessionSelection ?: savedSelection()
             runCatching {
                 report?.event(DiagnosticEvent.MODEL_LOAD_STARTED, configuration = DiagnosticConfiguration(
                     runtime = selection.runtimeId,
                     modelVersion = modelLifecycle.readiness(selection)?.installedModel?.version,
                     runtimeVersion = if (selection.runtimeId in setOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_sk", "parakeet_unified", "nemotron", "cohere"))
                         BuildConfig.SHERPA_ONNX_VERSION else null,
-                    language = forcedLanguage.takeIf { selection.runtimeId == "whisper_ggml" }
+                    language = if (selection.runtimeId == "whisper_ggml") forcedLanguage else routingLanguage
                 ))
             }
             val loadedBackend = if (liveBenchmarkSession != null) {
@@ -599,34 +605,187 @@ abstract class RecordingSession {
         forcedLanguage = language
     }
 
+    // Language routing (SK | EN button). Chooses the model per recording; SPEECH_BACKEND is never written.
+    // Written on the main thread; read by the load and decode coroutines.
+    @Volatile private var dictationLanguage: DictationLanguage? = null
+    /** The saved model choice, read once per dictation in create(). */
+    @Volatile private var baseSelection: RecognitionModelSelection? = null
+    /** The model used for this dictation: [baseSelection] or the Slovak model. Null until create() commits it. */
+    @Volatile private var sessionSelection: RecognitionModelSelection? = null
+    /** ROUTE_BY_LANGUAGE is on and the Slovak model is installed (never during model comparison). */
+    @Volatile private var routingAvailable = false
+    /** "sk" or "en" for the Harper and S1 gates while routing is active. Whisper's forcedLanguage stays separate. */
+    @Volatile private var routingLanguage: String? = null
+    /** Runtimes the button may switch to in this dictation (installed); null until create() has checked. */
+    @Volatile private var switchableRuntimes: Set<String>? = null
+    /** Whisper's caption when the saved model is Whisper (it has no catalog entry). */
+    private var whisperCaption: String? = null
+    private var modelSessionJob: Job? = null
+
+    private suspend fun savedSelection() = RecognitionModelSelection(
+        runtimeId = context.getSetting(SPEECH_BACKEND),
+        moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
+        nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
+        asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
+    )
+
+    private fun routedSelection(language: DictationLanguage?): RecognitionModelSelection? {
+        val base = baseSelection ?: return null
+        val runtime = LanguageRouting.routeRuntime(base.runtimeId, routingAvailable, slovakInstalled = true, language)
+        return if (runtime == base.runtimeId) base else RecognitionModelSelection(runtimeId = runtime)
+    }
+
+    /** Runtime of this dictation's model; model comparison keeps its own selection. */
+    private suspend fun effectiveRuntimeId(): String =
+        liveBenchmarkSession?.selection?.runtimeId ?: sessionSelection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)
+
+    private fun modelCaption(model: RecognitionModel?, backendType: SpeechBackendType): String? =
+        if (backendType == SpeechBackendType.WhisperGGML) whisperCaption
+        else model?.displayName?.let { name ->
+            if (backendType == SpeechBackendType.Nemotron && !name.startsWith("Nemotron")) "Nemotron $name" else name
+        }
+
+    private suspend fun isInstalled(selection: RecognitionModelSelection): Boolean =
+        if (selection.runtimeId.toSpeechBackendType() == SpeechBackendType.WhisperGGML) {
+            context.selectedWhisperModelsForCurrentSettings(forcedLanguage).none { context.modelNeedsDownloading(it) }
+        } else modelLifecycle.readiness(selection)?.isReady != false
+
+    /** Applies the current SK | EN choice to this dictation's model state. Main thread, no suspension. */
+    private fun commitSessionSelection(selection: RecognitionModelSelection) {
+        val type = selection.runtimeId.toSpeechBackendType()
+        val model = modelLifecycle.readiness(selection)?.model
+        sessionSelection = selection
+        routingLanguage = LanguageRouting.cleanupLanguage(routingAvailable, slovakInstalled = true, dictationLanguage)
+        selectedManagedModel = model
+        selectedModelName = modelCaption(model, type)
+    }
+
+    private fun isStreamingRuntime(backendType: SpeechBackendType) =
+        backendType == SpeechBackendType.ParakeetUnified ||
+            backendType == SpeechBackendType.Nemotron ||
+            backendType == SpeechBackendType.Asr4all ||
+            backendType == SpeechBackendType.Moonshine
+
+    /** Whether the Slovak model is installed; the SK | EN button is only offered then. */
+    fun slovakModelInstalled(): Boolean = runCatching {
+        modelLifecycle.readiness(RecognitionModelSelection(runtimeId = LanguageRouting.SLOVAK_RUNTIME))?.isReady == true
+    }.getOrDefault(false)
+
+    protected open fun routedModelChanged(modelName: String?) {}
+
+    /** Live-text models replay audio from the start of a recording, so they cannot be swapped in mid-recording. */
+    fun dictationLanguageSwitchableWhileRecording(): Boolean = DictationLanguage.values().all { language ->
+        routedSelection(language)?.runtimeId?.toSpeechBackendType()?.let { !isStreamingRuntime(it) } ?: true
+    }
+
+    /**
+     * Sets the SK | EN choice for this dictation. Call on the main thread.
+     * Before recording it only changes which model will load. During recording the old engine is
+     * closed and the other model starts loading at once, while the user keeps talking.
+     * Returns false when the switch is not possible now (after Stop, or a live-text model is involved).
+     */
+    fun setDictationLanguage(language: DictationLanguage?): Boolean {
+        val next = routedSelection(language)
+        val targets = switchableRuntimes
+        if (next != null && targets != null && next.runtimeId !in targets) return false
+        val previous = sessionSelection
+        if (liveBenchmarkSession != null || previous == null || next == null) {
+            // create() has not committed the model yet; it applies the latest language itself.
+            dictationLanguage = language
+            return true
+        }
+        val generation = recognitionGeneration
+        val loading = synchronized(this) { loadModelJob != null || backendForGeneration(generation) != null }
+        if (next == previous) {
+            dictationLanguage = language
+            routingLanguage = LanguageRouting.cleanupLanguage(routingAvailable, slovakInstalled = true, language)
+            return true
+        }
+        val previousType = previous.runtimeId.toSpeechBackendType()
+        val nextType = next.runtimeId.toSpeechBackendType()
+        if (loading && (!isRecording || isStreamingRuntime(previousType) || isStreamingRuntime(nextType))) return false
+
+        dictationLanguage = language
+        commitSessionSelection(next)
+        routedModelChanged(selectedModelName)
+        if (!loading) streamingAudio.reset(isStreamingRuntime(nextType))
+        swapModelSession(generation, selectedManagedModel)
+        if (loading) reloadRoutedModel(generation)
+        return true
+    }
+
+    /** Keeps model deletion blocked for the model this dictation now uses. */
+    private fun swapModelSession(generation: Long, model: RecognitionModel?) {
+        val pendingSession = modelSessionJob
+        lifecycleScope.launch {
+            // Wait until the dictation stored its first session, so the swap cannot be overwritten by it.
+            pendingSession?.join()
+            val lease = try { modelLifecycle.acquireSession(model) } catch (_: Exception) { return@launch }
+            val old = synchronized(this@RecordingSession) {
+                val current = modelSession
+                if (generation == recognitionGeneration && current?.first == generation) {
+                    modelSession = generation to lease
+                    current.second
+                } else lease // Recording never started or was reset.
+            }
+            old.close()
+        }
+    }
+
+    /** Releases this recording's engine and loads the routed model. Stop waits for this job. */
+    private fun reloadRoutedModel(generation: Long) {
+        synchronized(this) {
+            val previousLoad = loadModelJob
+            loadModelJob = lifecycleScope.launch {
+                withContext(Dispatchers.Default) {
+                    previousLoad?.join()
+                    val (oldBackend, oldLease) = synchronized(this@RecordingSession) {
+                        // A failed earlier load cancels the capture; do not load another engine for it.
+                        if (generation != recognitionGeneration || stopReason == StopReason.Cancel) return@withContext
+                        val loaded = backend.takeIf { backendGeneration == generation }
+                        val lease = parakeetLease?.takeIf { it.generation == generation }
+                        if (loaded != null) { backend = null; backendGeneration = -1L }
+                        if (lease != null) parakeetLease = null
+                        loaded to lease
+                    }
+                    withContext(NonCancellable) {
+                        // keepWarm = false: only one engine fits, so the old one is closed before the new load.
+                        if (oldLease != null) modelLifecycle.release(oldLease.lease, lifecycleScope)
+                        else if (oldBackend != null) modelLifecycle.release(oldBackend, lifecycleScope)
+                    }
+                    loadModelInner()
+                }
+            }
+        }
+    }
+
     fun create() {
         selectedModelName = null
         loading()
 
         lifecycleScope.launch {
-            val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+            val base = liveBenchmarkSession?.selection ?: savedSelection()
+            baseSelection = base
+            routingAvailable = liveBenchmarkSession == null &&
+                LanguageRouting.isActive(context.getSetting(ROUTE_BY_LANGUAGE), slovakModelInstalled())
+            whisperCaption = if (base.runtimeId.toSpeechBackendType() == SpeechBackendType.WhisperGGML) {
+                context.selectedWhisperModelsForCurrentSettings(forcedLanguage).joinToString(" / ") {
+                    it.name.substringBefore(" (")
+                }
+            } else null
+            switchableRuntimes = if (routingAvailable) {
+                DictationLanguage.values().mapNotNull { routedSelection(it) }.distinct()
+                    .filter { isInstalled(it) }.map { it.runtimeId }.toSet()
+            } else null
+            // The model checks below use the language chosen so far; a tap meanwhile is committed after them.
+            val selection = if (liveBenchmarkSession != null) base else routedSelection(dictationLanguage) ?: base
+            val backendType = selection.runtimeId.toSpeechBackendType()
             diagnostics?.end(DiagnosticEvent.SESSION_RESET)
             diagnosticSamplingJob?.cancel()
             personalVocabulary = if (liveBenchmarkSession != null) "" else context.getSetting(PERSONAL_DICTIONARY)
-            val readiness = RecognitionModelLifecycle.create(
-                context.filesDir,
-                BuildConfig.BUNDLE_PARAKEET_MODEL
-            ).readiness(
-                liveBenchmarkSession?.selection ?: RecognitionModelSelection(
-                    runtimeId = backendType.id,
-                    moonshineVariantId = context.getSetting(MOONSHINE_MODEL_VARIANT),
-                    nemotronVariantId = context.getSetting(NEMOTRON_PROFILE),
-                    asr4allVariantId = context.getSetting(ASR4ALL_VARIANT)
-                )
-            )
+            val readiness = modelLifecycle.readiness(selection)
             selectedManagedModel = readiness?.model
-            selectedModelName = readiness?.model?.displayName?.let { name ->
-                if (backendType == SpeechBackendType.Nemotron && !name.startsWith("Nemotron")) {
-                    "Nemotron $name"
-                } else {
-                    name
-                }
-            }
+            selectedModelName = modelCaption(readiness?.model, backendType)
             val report = AppDiagnostics.session(readiness?.model?.id ?: backendType.id)
             diagnostics = report
             report?.event(DiagnosticEvent.SESSION_STARTED)
@@ -644,12 +803,7 @@ abstract class RecordingSession {
                 needRecognitionModelDownload(readiness.model)
                 return@launch
             }
-            streamingAudio.reset(
-                backendType == SpeechBackendType.ParakeetUnified ||
-                    backendType == SpeechBackendType.Nemotron ||
-                    backendType == SpeechBackendType.Asr4all ||
-                    backendType == SpeechBackendType.Moonshine
-            )
+            streamingAudio.reset(isStreamingRuntime(backendType))
             if (backendType == SpeechBackendType.WhisperGGML) {
                     val requiredModels = liveBenchmarkSession?.model?.whisper?.let { listOf(it) }
                         ?: context.selectedWhisperModelsForCurrentSettings(forcedLanguage)
@@ -661,6 +815,20 @@ abstract class RecordingSession {
                         needWhisperModelDownload(requiredModels)
                         return@launch
                     }
+            }
+
+            // No suspension from here on: commit the model for the latest SK | EN choice.
+            if (liveBenchmarkSession != null) {
+                sessionSelection = selection
+            } else {
+                val committed = routedSelection(dictationLanguage)?.takeIf {
+                    it == selection || switchableRuntimes?.contains(it.runtimeId) == true
+                } ?: selection
+                commitSessionSelection(committed)
+                if (committed != selection) {
+                    streamingAudio.reset(isStreamingRuntime(committed.runtimeId.toSpeechBackendType()))
+                    routedModelChanged(selectedModelName)
+                }
             }
 
             if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -698,7 +866,7 @@ abstract class RecordingSession {
 
     private fun startRecordingWithModelSession() {
         val generation = recognitionGeneration
-        lifecycleScope.launch {
+        modelSessionJob = lifecycleScope.launch {
             val lease = try { modelLifecycle.acquireSession(selectedManagedModel) } catch (failure: Exception) {
                 failRecognition(failure, generation)
                 return@launch
@@ -787,7 +955,7 @@ abstract class RecordingSession {
             recorderJob = lifecycleScope.launch {
                 withContext(Dispatchers.Default) {
                     canExpandSpace = context.getSetting(ENABLE_30S_LIMIT) == false
-                    val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+                    val backendType = effectiveRuntimeId().toSpeechBackendType()
                     val shouldUseVad = context.getSetting(IS_VAD_ENABLED) &&
                         (backendType != SpeechBackendType.Parakeet || context.getSetting(PARAKEET_USE_VAD))
                     val endOfSpeechProfile = context.getSetting(END_OF_SPEECH_PROFILE).toEndOfSpeechProfile()
@@ -1122,7 +1290,7 @@ abstract class RecordingSession {
     ) {
         val drainMs = RecordingSessionPolicy.tailDrainMs(
             reason,
-            context.getSetting(SPEECH_BACKEND).toSpeechBackendType(),
+            effectiveRuntimeId().toSpeechBackendType(),
             context.getSetting(MANUAL_STOP_DRAIN_MS)
         )
         captureEvidence?.takeIf { it.first == captureGeneration }?.second?.drainRequestedMs = drainMs
@@ -1222,7 +1390,10 @@ abstract class RecordingSession {
         runBackend ?: throw IllegalStateException("Model did not load for this recognition")
 
         val finalStopReason = stopReason
-        val backendType = (liveBenchmarkSession?.selection?.runtimeId ?: context.getSetting(SPEECH_BACKEND)).toSpeechBackendType()
+        val backendType = effectiveRuntimeId().toSpeechBackendType()
+        // Whisper keeps its forced language first; for other models the SK | EN choice wins over the old picker.
+        val cleanupLanguage = if (backendType == SpeechBackendType.WhisperGGML) forcedLanguage ?: routingLanguage
+            else routingLanguage ?: forcedLanguage
         val vadEnabled = context.getSetting(IS_VAD_ENABLED) &&
             (backendType != SpeechBackendType.Parakeet || context.getSetting(PARAKEET_USE_VAD))
         val sampleCount = floatSamples.position()
@@ -1259,7 +1430,7 @@ abstract class RecordingSession {
                 configuration = DiagnosticConfiguration(language = runBackend.detectedLanguage))
             saveBackupTranscript(savedAudioId, rawText)
             val finalized = TranscriptFinalizer.clean(context, rawText, backendType,
-                runBackend.detectedLanguage, forcedLanguage, personalVocabulary, report,
+                runBackend.detectedLanguage, cleanupLanguage, personalVocabulary, report,
                 onCleaning = { withContext(Dispatchers.Main) { cleaning() } })
             validEmpty = finalized.validEmpty
             transcriptCapture = finalized.capture

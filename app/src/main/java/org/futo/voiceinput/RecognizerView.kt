@@ -72,6 +72,16 @@ import kotlinx.coroutines.launch
 import org.futo.voiceinput.ml.RunState
 import org.futo.voiceinput.recognition.RecognitionModel
 import org.futo.voiceinput.settings.ENABLE_SOUND
+import org.futo.voiceinput.settings.DICTATION_LANGUAGE
+import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
+import org.futo.voiceinput.settings.setSetting
+import org.futo.voiceinput.diagnostics.DiagnosticLanguageProbe
+import org.futo.voiceinput.diagnostics.KeyboardLanguageProbe
+import org.futo.voiceinput.recognition.DictationLanguage
+import org.futo.voiceinput.recognition.LanguageRouting
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.contentDescription
 import org.futo.voiceinput.settings.LANGUAGE_TOGGLES
 import org.futo.voiceinput.settings.MANUALLY_SELECT_LANGUAGE
 import org.futo.voiceinput.settings.SETTINGS_DESTINATION_EXTRA
@@ -175,6 +185,53 @@ private fun RecognitionModelCaption(modelName: String?) {
     }
 }
 
+/** SK | EN choice for language routing. Each option is a radio button for TalkBack; [enabled] false only dims it. */
+@Composable
+fun DictationLanguageSwitch(selected: DictationLanguage, enabled: Boolean, onSelected: (DictationLanguage) -> Unit) {
+    val lockedLabel = stringResource(R.string.dictation_language_locked)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .selectableGroup(),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+    ) {
+        DictationLanguage.values().forEach { language ->
+            val isSelected = language == selected
+            val label = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_short
+                else R.string.dictation_language_en_short)
+            val description = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_description
+                else R.string.dictation_language_en_description)
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .defaultMinSize(minWidth = 64.dp, minHeight = 48.dp)
+                    // Always enabled so the tap is consumed here and never reaches the tap-to-stop surface.
+                    // A locked choice is refused by the caller.
+                    .selectable(selected = isSelected, role = Role.RadioButton,
+                        onClick = { if (enabled) onSelected(language) })
+                    .semantics {
+                        contentDescription = description
+                        if (!enabled) stateDescription = lockedLabel
+                    },
+                shape = RoundedCornerShape(24.dp),
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label, style = Typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SelectLanguage(languages: Set<String>, onSelected: (String) -> Unit) {
     val languageItems = LANGUAGE_LIST.filter { languages.contains(it.id) }
@@ -234,7 +291,9 @@ fun ColumnScope.PartialDecodingResult(text: String = "I am speaking [...]") {
 
 @Composable
 fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
-    onFinish: () -> Unit = {}, onWaveformDrawn: () -> Unit = {}) {
+    onFinish: () -> Unit = {},
+    dictationLanguage: DictationLanguage? = null, onDictationLanguage: (DictationLanguage) -> Unit = {},
+    dictationLanguageLocked: Boolean = false, onWaveformDrawn: () -> Unit = {}) {
     if (state.phase == RecognitionUiPhase.Inactive) return
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         if (state.isRecording) {
@@ -257,6 +316,11 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
             RecognizeLoadingCircle(state.statusText ?: stringResource(R.string.initializing))
         }
         RecognitionModelCaption(state.modelName)
+        if (dictationLanguage != null &&
+            (state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording)) {
+            DictationLanguageSwitch(dictationLanguage, enabled = !(state.isRecording && dictationLanguageLocked),
+                onSelected = onDictationLanguage)
+        }
         if (!compact && state.partialText.isNotBlank()) PartialDecodingResult(state.partialText)
     }
 }
@@ -384,6 +448,33 @@ abstract class RecognizerView {
 
     private var detectedLanguage: String? = null
     private var presentation by mutableStateOf(RecognitionUiState())
+    /** Current SK | EN choice; null hides the button (setting off, Slovak model missing, or comparison). */
+    private var dictationLanguage by mutableStateOf<DictationLanguage?>(null)
+    /** True while recording with a live-text model on either side; the button is then disabled. */
+    private var dictationLanguageLocked by mutableStateOf(false)
+
+    /** Language signals from the keyboard or the calling app; locale tags only. */
+    protected open fun probeKeyboardLanguage(): DiagnosticLanguageProbe? = null
+
+    private fun selectDictationLanguage(language: DictationLanguage) {
+        if (dictationLanguage == null || language == dictationLanguage) return
+        if (!recognizer.setDictationLanguage(language)) return
+        dictationLanguage = language
+        // A manual tap is remembered for the next dictation.
+        lifecycleScope.launch { context.setSetting(DICTATION_LANGUAGE, language.tag) }
+    }
+
+    /** Probes the keyboard language and decides the button's state before the recognizer starts. */
+    private suspend fun prepareDictationLanguage() {
+        val probe = probeKeyboardLanguage()
+        KeyboardLanguageProbe.report(probe)
+        val visible = liveBenchmarkSession == null &&
+            LanguageRouting.isActive(context.getSetting(ROUTE_BY_LANGUAGE), recognizer.slovakModelInstalled())
+        val language = if (visible) LanguageRouting.initialLanguage(probe?.resolvedLanguage(),
+            DictationLanguage.fromSetting(context.getSetting(DICTATION_LANGUAGE))) else null
+        dictationLanguage = language
+        recognizer.setDictationLanguage(language)
+    }
     private val microphoneState = mutableStateOf(MicrophoneRouteState())
 
     @Composable
@@ -405,7 +496,9 @@ abstract class RecognizerView {
                 onPauseVAD = { if (state.isRecording) recognizer.pauseVAD(it) },
                 allowClick = state.isRecording
             ) {
-                RecognitionContent(state, compact = compact, onFinish = { finishRecognizerIfRecording() }) {
+                RecognitionContent(state, compact = compact, onFinish = { finishRecognizerIfRecording() },
+                    dictationLanguage = dictationLanguage, onDictationLanguage = ::selectDictationLanguage,
+                    dictationLanguageLocked = dictationLanguageLocked) {
                     if (firstWaveformFrame && state.bars.isNotEmpty()) {
                         firstWaveformFrame = false
                         recognizer.waveformDrawn()
@@ -420,6 +513,10 @@ abstract class RecognizerView {
             get() = this@RecognizerView.context
         override val lifecycleScope: LifecycleCoroutineScope
             get() = this@RecognizerView.lifecycleScope
+
+        override fun routedModelChanged(modelName: String?) {
+            presentation = presentation.copy(modelName = modelName)
+        }
 
         override fun microphoneRouteChanged(state: MicrophoneRouteState) {
             microphoneState.value = state
@@ -651,6 +748,7 @@ abstract class RecognizerView {
 
         override fun recordingStarted() {
             firstWaveformFrame = true
+            dictationLanguageLocked = !dictationLanguageSwitchableWhileRecording()
             presentation = presentation.copy(modelName = selectedModelName).recording()
 
             playSound(startSoundId)
@@ -697,6 +795,7 @@ abstract class RecognizerView {
             recognizer.liveBenchmarkSession = liveBenchmarkSession
             loadSettings()
             if (liveBenchmarkSession != null) { shouldRequestLanguage = false; languages = setOf("en") }
+            prepareDictationLanguage()
 
             if(shouldRequestLanguage && (languages.size > 1)) {
                 setContent {

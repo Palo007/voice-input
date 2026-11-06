@@ -80,7 +80,8 @@ object DiagnosticArchive {
                 "OPERATION: 0 unknown history write, 1 model activation, 2 model deletion, 3 model invalidation, 10 history open/purge, 11 history append, 12 history finish, 13 history transcript save, 14 history purge, 15 history retranscription.\n" +
                 "RESOURCE_UNAVAILABLE=1 means resource collection failed; unsupported Android fields are absent. APPLIED/LOW_MEMORY/CATCHING_UP are 0/1.\n" +
                 "THERMAL_STATUS and EXIT_REASON/EXIT_STATUS follow Android PowerManager/ApplicationExitInfo codes; MICROPHONE_* codes follow app microphone routing categories.\n" +
-                "S1 reportId is a random local join key, unrelated to transcript text or recording IDs.\n")
+                "S1 reportId is a random local join key, unrelated to transcript text or recording IDs.\n" +
+                "LANGUAGE_PROBE records the language signals seen when dictation starts: locale tags, the previous input method id, or the calling package only when it is an input method (otherwise \"other\").\n")
             entry("summary.txt", summary(snapshot, droppedEvents, omitted))
             entry("collection-modes.json", DiagnosticStore.json.encodeToString(snapshot.modes))
             entry("environment.json", environmentJson)
@@ -119,6 +120,11 @@ object DiagnosticArchive {
         appendLine("Event counts:")
         snapshot.records.groupingBy { it.event }.eachCount().forEach { (event, count) ->
             appendLine("  $event: $count")
+        }
+        snapshot.records.filter { it.languageProbe != null }.takeLast(10).takeIf { it.isNotEmpty() }?.let { probes ->
+            appendLine()
+            appendLine("Keyboard language probes (latest ${probes.size}; locale tags and input method ids only):")
+            probes.forEach { appendLine("  ${it.timestampMs}: ${it.languageProbe?.describe()}") }
         }
         val sessions = snapshot.records.filter { it.sessionId != null }.groupBy { it.sessionId }
         val terminal = setOf(DiagnosticEvent.SESSION_CANCELLED, DiagnosticEvent.SESSION_RESET,
