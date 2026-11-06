@@ -249,6 +249,7 @@ object AppDiagnostics {
             put("keepWarm", context.getSetting(PARAKEET_KEEP_WARM))
             put("keepTwoWarm", context.getSetting(PARAKEET_KEEP_TWO_WARM))
             put("liveTextAtPauses", context.getSetting(LIVE_TEXT_AT_PAUSES))
+            put("retranscribeWholeRecording", context.getSetting(RETRANSCRIBE_WHOLE_RECORDING))
             put("cleanupEnabled", context.getSetting(S1_MINI_ENABLED))
             put("harperEnabled", context.getSetting(HARPER_ENABLED))
             put("harperExplicitEnglish", context.getSetting(HARPER_EXPLICIT_ENGLISH))
