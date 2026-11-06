@@ -20,7 +20,8 @@ class S1MiniEnglishGateTest {
     @Test
     fun legacyBackendsAllowEnglishDictationWithoutLanguageMetadata() {
         SpeechBackendType.entries.filter {
-            it != SpeechBackendType.Cohere && it != SpeechBackendType.ParakeetRedux && it != SpeechBackendType.Whistle
+            it != SpeechBackendType.Cohere && it != SpeechBackendType.ParakeetRedux && it != SpeechBackendType.Whistle &&
+                it != SpeechBackendType.ParakeetSlovak
         }.forEach { backend ->
             assertTrue(backend.id, established(backend))
             assertTrue(backend.id, established(backend, detected = ""))
@@ -33,6 +34,14 @@ class S1MiniEnglishGateTest {
         assertTrue(established(SpeechBackendType.ParakeetUltra))
         assertFalse(established(SpeechBackendType.ParakeetUltra, forced = "sk"))
         assertFalse(established(SpeechBackendType.ParakeetUltra, detected = "cs"))
+    }
+
+    @Test
+    fun parakeetSlovakDoesNotAssumeEnglish() {
+        assertFalse(established(SpeechBackendType.ParakeetSlovak))
+        assertTrue(established(SpeechBackendType.ParakeetSlovak, detected = "en"))
+        assertTrue(established(SpeechBackendType.ParakeetSlovak, forced = "en"))
+        assertFalse(established(SpeechBackendType.ParakeetSlovak, forced = "sk"))
     }
 
     @Test

@@ -104,6 +104,10 @@ internal fun parakeetUltraBackend(): ParakeetBackend = ParakeetBackend(
     decoderFactory = { SherpaParakeetDecoder(it, ParakeetUltraModel.recognitionModel, featureDim = 128) }
 )
 
+internal fun parakeetSlovakBackend(): ParakeetBackend = ParakeetBackend(
+    decoderFactory = { SherpaParakeetDecoder(it, ParakeetSlovakModel.recognitionModel, featureDim = 128) }
+)
+
 private class SherpaParakeetDecoder(
     context: Context,
     recognitionModel: RecognitionModel = ParakeetModel.recognitionModel,

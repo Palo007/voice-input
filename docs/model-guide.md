@@ -52,6 +52,7 @@ for pinned sources, timings and test limits.
 | Live multilingual text | Nemotron 3.5 Multilingual | Orukeet if final-only text is acceptable |
 | Arabic dictation | Cohere Transcribe with Arabic selected | Whisper multilingual |
 | A smaller multilingual download to experiment with | Parakeet Redux | Orukeet; Redux still needs Android device validation |
+| Slovak dictation, experimental | Parakeet TDT V3 Slovak | Parakeet Ultra or Parakeet TDT V3 if you also dictate in English; the Slovak model still needs Android device validation |
 | Optional English legacy fallback | Whisper English | A live English model or Orukeet; Whisper is not required for normal English dictation |
 | Languages beyond the other models' coverage | Whisper multilingual | Check the language and model results before relying on it |
 
@@ -71,6 +72,7 @@ These are the options exposed by this app, not every capability of the upstream 
 | **Moonshine Small** | English | Live | Lighter English streaming option when resource use matters. | [Moonshine AI](https://github.com/moonshine-ai/moonshine) |
 | **Moonshine Medium** | English | Live | Larger English streaming option intended to favor accuracy, with greater resource use than Small. | [Moonshine AI](https://github.com/moonshine-ai/moonshine) |
 | **Parakeet TDT 0.6B V3** | 25 European languages | After Stop | NVIDIA's multilingual alternative to Orukeet, useful for comparing results on your own speech. | [NVIDIA](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) · [INT8 export](https://huggingface.co/twmht/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8) |
+| **Parakeet TDT V3 Slovak** | Slovak; other languages, including English, may be less accurate | After Stop | KInIT's Slovak-only fine-tune of Parakeet TDT V3. The publisher reports fewer errors than V3 on Slovak test sets and warns that the other 24 languages get worse. The app uses a community 8-bit export with the same size and runtime as V3. Android speed and accuracy are not yet measured. | [KInIT](https://huggingface.co/kinit/parakeet-tdt-0.6b-v3-sk) · [INT8 community export](https://huggingface.co/vibeide-dev/parakeet-tdt-0.6b-v3-sk-sherpa-onnx-int8) |
 | **Parakeet Ultra** | 25 European languages | After Stop | Moondream's post-trained Parakeet TDT V3; publisher results for the original weights show fewer errors than V3, especially in noise. The app uses a community 8-bit export. Same size and runtime as V3. Android speed and accuracy are not yet measured. | [Moondream](https://huggingface.co/moondream/parakeet-ultra) · [INT8 community export](https://huggingface.co/erponce/sherpa-onnx-parakeet-ultra-tdt-0.6b-v3-int8) |
 | **Parakeet Unified EN 0.6B** | English | Buffered live | Recomputes recent context for live updates. More work per update than a recognizer that reuses cached streaming state. | [Sherpa-ONNX export](https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-560ms) |
 | **Nemotron English** | English | Live | Choose Low latency, Balanced, or Accuracy profiles to trade update frequency against recognition context. | [NVIDIA](https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b) · [Sherpa-ONNX packages](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) |
@@ -104,6 +106,7 @@ unknown means no comparable measurement is available, not zero usage.
 | Moonshine Medium | 449.5 | 449.5 | Unknown across devices |
 | Parakeet TDT V3 | 670.5 | 670.5 | Unknown across devices |
 | Parakeet Ultra | 684.6 | 684.6 | Unknown across devices |
+| Parakeet TDT V3 Slovak | 670.6 | 670.6 | Unknown across devices |
 | Parakeet Unified EN | 663.0 | 663.0 | Unknown across devices |
 | Nemotron English, each 80/160/560 ms profile | 463.9 | 661.9 | Unknown across devices; profiles have separate packages |
 | Nemotron 3.5 Multilingual | 682.2 | 682.2 | Unknown across devices |
@@ -138,7 +141,7 @@ same audio, correct references and the same device to compare them yourself.
   speed and accuracy on the actual device before relying on either.
 - For English with built-in formatting, compare ASR4ALL sizes. For live text
   without that PCEC stage, compare Moonshine and Nemotron English. For final-only
-  English, include Orukeet, Phonon 2 and the Parakeet variants.
+  English, include Orukeet, Phonon 2 and the Parakeet variants other than the Slovak fine-tune.
 - For Spanish and supported European languages, start with Orukeet and compare
   Parakeet TDT V3 or Redux. Whistle supports Spanish plus six other languages.
   Nemotron Multilingual provides live text and optional automatic detection.
@@ -200,6 +203,7 @@ Models download separately into app-private storage. The normal APK does not bun
 
 - **Orukeet:** about 487 MB to download and 672 MB installed. Allow about 1.16 GB free during installation for the archive and extracted files. Interrupted downloads can resume when the server supports byte ranges.
 - **Parakeet Ultra:** about 685 MB to download and install as individual files from a revision-pinned community INT8 export, each checked by SHA-256. The export's decoder is larger than V3's because only weight matrices are quantized.
+- **Parakeet TDT V3 Slovak:** about 671 MB to download and install as individual files from a revision-pinned community INT8 export, each checked by SHA-256. The export's README, which carries the CC BY 4.0 attribution, is downloaded with it.
 - **Parakeet Redux:** about 213 MB to download and install, using a revision-pinned packed GGUF with SHA-256 verification. ARM dot-product support enables its NEON kernel; older ARM64 CPUs use a slower scalar fallback.
 - **Cohere:** about 2.89 GB of model files, plus working memory during recognition. Longer recordings use chunks of up to 35 seconds; words near boundaries may need checking.
 - **S1-mini:** about 484.2 MB for the pinned Q4_K_M model.

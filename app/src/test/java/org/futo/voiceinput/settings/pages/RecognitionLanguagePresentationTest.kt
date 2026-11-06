@@ -14,6 +14,9 @@ class RecognitionLanguagePresentationTest {
                 recognitionLanguageGuidance(requireNotNull(RecognitionModelCatalog.modelFor(it)))
             )
         }
+        val slovak = recognitionLanguageGuidance(requireNotNull(RecognitionModelCatalog.modelFor("parakeet_sk")))
+        assertTrue(slovak.startsWith("Tuned for Slovak."))
+        assertTrue(slovak.contains("including English, may be lower"))
         assertEquals(
             "28 languages and Auto-detect. Choose a recognition language or Auto-detect.",
             recognitionLanguageGuidance(RecognitionModelCatalog.nemotronMultilingual)

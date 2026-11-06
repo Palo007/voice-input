@@ -11,6 +11,7 @@ import org.futo.voiceinput.nemotron.nemotronModelDirectory
 import org.futo.voiceinput.nemotron.toNemotronProfile
 import org.futo.voiceinput.parakeet.ParakeetBackend
 import org.futo.voiceinput.parakeet.orukeetBackend
+import org.futo.voiceinput.parakeet.parakeetSlovakBackend
 import org.futo.voiceinput.parakeet.parakeetUltraBackend
 import org.futo.voiceinput.parakeet.parakeetUnifiedBackend
 import org.futo.voiceinput.settings.MOONSHINE_MODEL_VARIANT
@@ -32,6 +33,7 @@ internal fun managedRecognitionBackend(
     "parakeet" -> ParakeetBackend()
     "orukeet" -> orukeetBackend()
     "parakeet_ultra" -> parakeetUltraBackend()
+    "parakeet_sk" -> parakeetSlovakBackend()
     "parakeet_unified" -> parakeetUnifiedBackend()
     "parakeet_redux" -> org.futo.voiceinput.redux.ReduxBackend()
     "phonon" -> org.futo.voiceinput.phonon.PhononBackend()

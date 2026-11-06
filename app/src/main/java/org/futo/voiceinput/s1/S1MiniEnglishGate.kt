@@ -31,6 +31,8 @@ object S1MiniEnglishGate {
             SpeechBackendType.Cohere -> false
             SpeechBackendType.Whistle -> false
             SpeechBackendType.ParakeetRedux -> false
+            // Slovak-tuned, so English cleanup is not applied unless English is detected or forced.
+            SpeechBackendType.ParakeetSlovak -> false
 
             SpeechBackendType.WhisperGGML ->
                 enabledWhisperLanguages.isEmpty() || "en" in enabledWhisperLanguages

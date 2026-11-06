@@ -87,13 +87,15 @@ Its options for steering the output are `hotwordsFile`, `blankPenalty`, and rule
 
 **Estimated effort:** medium, about 2 to 4 sessions including the corpus work.
 
-## Step 4: Try the existing Slovak fine-tune
+## Step 4: Try the existing Slovak fine-tune: added on branch `codex/issue-52-slovak-finetune`
 
-[kinit/parakeet-tdt-0.6b-v3-sk](https://huggingface.co/kinit/parakeet-tdt-0.6b-v3-sk) has a [sherpa-onnx export](https://huggingface.co/vibeide-dev/parakeet-tdt-0.6b-v3-sk-sherpa-onnx-int8).
+[kinit/parakeet-tdt-0.6b-v3-sk](https://huggingface.co/kinit/parakeet-tdt-0.6b-v3-sk) is now a selectable catalog model, "Parakeet TDT V3 Slovak" (runtime `parakeet_sk`). It uses the [VibeiDE sherpa-onnx export](https://huggingface.co/vibeide-dev/parakeet-tdt-0.6b-v3-sk-sherpa-onnx-int8), pinned at revision `656db267` with SHA-256 for each file. Details: [ISSUE-52-slovak-finetune-notes.md](ISSUE-52-slovak-finetune-notes.md).
 
-- Add it like Ultra (a catalog entry with pinned hashes), or through custom import (#52 idea 3).
-- Check its English quality. A Slovak-only fine-tune can forget English.
-- If it's good in Slovak but weak in English, step 3's language choice could route Slovak to it and English to Ultra. But two engines in RAM is a lot for a phone.
+- The export uses standard dynamic int8, like the twmht V3 export, not `MatMulNBits`. So step 2's Android loading risk does not apply to it.
+- It shares the warm engine slot with V3 and Ultra (`WARM_PARAKEET_RUNTIMES`). Only one is loaded at a time.
+- English cleanup (Harper, S1) is not applied to it unless English is detected or forced.
+- KInIT's model card says the other 24 languages get significantly worse. **Still to check on the phone:** English quality, Czech/Polish spellings in Slovak, and Stop-to-text time against V3 and Ultra (test plan in the notes).
+- If it is good in Slovak but weak in English, step 3's language choice could route Slovak to it and English to Ultra. But two engines in RAM is a lot for a phone; switching engines costs a cold load each time.
 
 ## Step 5: Own fine-tuning (only if steps 3 and 4 aren't enough)
 

@@ -19,11 +19,12 @@ internal class ParakeetEngineLease(
 }
 
 /** Runtime ids whose engine is kept loaded between recordings. Only one is held at a time. */
-internal val WARM_PARAKEET_RUNTIMES = setOf("parakeet", "parakeet_ultra")
+internal val WARM_PARAKEET_RUNTIMES = setOf("parakeet", "parakeet_ultra", "parakeet_sk")
 
 private fun warmParakeetBackend(runtimeId: String): ParakeetBackend = when (runtimeId) {
     "parakeet" -> ParakeetBackend()
     "parakeet_ultra" -> parakeetUltraBackend()
+    "parakeet_sk" -> parakeetSlovakBackend()
     else -> throw IllegalArgumentException("$runtimeId is not a warm Parakeet runtime")
 }
 

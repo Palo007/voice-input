@@ -27,6 +27,8 @@ object HarperEnglishGate {
             // Orukeet, Parakeet Ultra and Parakeet TDT v3 are multilingual and do not expose detection.
             SpeechBackendType.Orukeet, SpeechBackendType.ParakeetUltra, SpeechBackendType.Parakeet,
             SpeechBackendType.ParakeetRedux -> explicitlyEnglish
+            // Slovak-tuned, so its output is not assumed to be English.
+            SpeechBackendType.ParakeetSlovak -> false
             SpeechBackendType.Cohere -> false // Its backend supplies the selected language.
             SpeechBackendType.Whistle -> false // English requires a detected language.
         }

@@ -22,6 +22,13 @@ class HarperEnglishGateTest {
         }
     }
 
+    @Test fun slovakFineTuneIsNotAssumedEnglish() {
+        assertFalse(accepts(SpeechBackendType.ParakeetSlovak))
+        assertFalse(accepts(SpeechBackendType.ParakeetSlovak, explicit = true))
+        assertTrue(accepts(SpeechBackendType.ParakeetSlovak, detected = "en"))
+        assertTrue(accepts(SpeechBackendType.ParakeetSlovak, forced = "en"))
+    }
+
     @Test fun selectedAndDetectedLanguagesAreRespected() {
         assertTrue(accepts(SpeechBackendType.Cohere, detected = "en"))
         assertFalse(accepts(SpeechBackendType.Cohere))
