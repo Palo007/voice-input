@@ -67,7 +67,7 @@ class ParakeetBackend internal constructor(
         }
         try {
             mutex.withLock {
-                decoderOrThrow().transcribe(samples).also { result ->
+                decoderOrThrow().transcribe(InputLevel.normalize(samples)).also { result ->
                     if (diagnosticsEnabled) {
                         val outcome = if (result.isBlank()) "no_speech" else "text"
                         Log.i(

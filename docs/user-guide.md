@@ -75,8 +75,11 @@ Slovak and your selected model (for example Parakeet Ultra) for English.
 Only one model is kept in memory. The first dictation after switching between
 SK and EN takes a few seconds longer because the other model has to load.
 Dictating again in the same language within the keep-warm time (5 minutes by
-default) does not reload it. If you switch while speaking, the app starts loading the other model right away; if you press Stop
-before it is ready, the text appears once loading finishes.
+default) does not reload it. If you switch while speaking, what you said before
+the tap is transcribed by the model that was active then, and only the rest goes
+to the other model, so nothing is lost. The split is placed at the last short
+pause before the tap. The app then loads the other model right away; if you
+press Stop before it is ready, the text appears once loading finishes.
 
 The setting does not change your selected model. If you delete the Slovak model,
 the button disappears and dictation uses your selected model. With a model that

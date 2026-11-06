@@ -97,6 +97,41 @@ Install the dev APK from `/sdcard/Download`. Download **Parakeet Ultra** (select
 6. **TalkBack.** The two options read as "Slovak. Uses the Slovak model." / "English. Uses your selected model." with a selected state.
 7. **Regression.** Setting off: no button, dictation unchanged. Model comparison: no button.
 
+## Follow-up: empty Slovak results and switching while speaking
+
+Reported: Slovak dictation sometimes ended with "nothing detected", and a switch while
+speaking must not lose any part of the recording.
+
+**Cause of the empty results: input level, not routing.** Four saved recordings with empty
+results were replayed on the phone through Sherpa-ONNX 1.13.4 with the app's config. Their
+average level was -36 to -38 dBFS (normal: about -30). The successful recordings were barely
+louder. Both Parakeet Ultra and the Slovak model return no text for such long, quiet audio;
+the Slovak model gives up slightly earlier. On synthetic speech both stop at about -28 dBFS
+peak. Splitting the audio into 10 s chunks or adding about 9 dB recovered the text. The
+`VOICE_RECOGNITION` microphone source has no automatic gain, so holding the phone further
+away is enough to trigger this.
+
+**Fix 1: `parakeet/InputLevel`.** Every offline Parakeet decode (V3, Ultra, Slovak, Orukeet)
+raises quiet audio to -25 dBFS RMS. The gain is limited by the 99.9th-percentile peak
+(<= 0.9, rarer clicks are clipped), capped at +20 dB, and never lowers the level. On the
+four empty recordings this applied 11-13 dB and both models returned full transcripts;
+the two control recordings decoded as before (217->216 and 164->164 characters).
+Other backends (ASR4ALL, Moonshine, Nemotron, Whisper) are unchanged.
+
+**Fix 2: no audio lost on a switch while speaking** (`recognition/SwitchSegments`,
+`AudioRecognizer.decodeSegmentBeforeSwitch`). Before, the newly selected model decoded the
+whole recording, so the Slovak model dropped English said before the tap. Now, before the
+old engine is released, it transcribes the audio up to the quietest 20 ms in the second
+before the tap. The final model decodes only the rest and the parts are joined in order.
+Below 0.3 s, or if that decode fails (including out of memory), the audio stays with the
+next model; it is never discarded. English cleanup is skipped when any part is Slovak.
+Several taps chain the same way. A reset during the decode releases the old engine and does
+not load another one.
+
+Known limits: the tap position lags real time by the recorder buffer and the split can move
+up to 1 s earlier, so the last words before the tap can go to the new model (still
+transcribed). A tap within milliseconds of the recording start goes to the new model whole.
+
 ## Open questions / follow-ups
 
 - If the probe confirms FUTO Keyboard is invisible, automatic selection with FUTO needs an upstream FUTO change (a locale on the voice switch).
