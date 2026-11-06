@@ -107,6 +107,8 @@ A "Pick the model by language" setting (off by default, needs the Slovak model) 
 - If step 3 makes Ultra good enough in Slovak with no Czech/Polish leaks, step 4b becomes unnecessary and the cold switch cost goes away.
 - The `routingLanguage` passed to the Harper and S1 gates is the same hook step 3's `detectedLanguage` would use.
 
+**Keep two models loaded** (setting `PARAKEET_KEEP_TWO_WARM`, off by default, same branch as idea 2): `ParakeetEngineManager` holds up to two engines, each unloaded after the keep-warm timeout (5 minutes) since its last use. With the SK | EN button, the other language's model is preloaded in the background, and a switch keeps the old engine loaded, so switching is instant. Costs about 1.5 to 2 GB of RAM. Device check: works well (2026-11-06).
+
 ## Step 5: Own fine-tuning (only if steps 3 and 4 aren't enough)
 
 - **What:** continue training Ultra on Slovak plus some English, so it keeps its English.
@@ -118,6 +120,7 @@ A "Pick the model by language" setting (off by default, needs the Slovak model) 
 ## Related #52 ideas that also help speed
 
 - **Idea 2, live text at pauses.** Decoding pieces while the user speaks leaves only the last piece to decode after Stop. This shortens the wait more than any setting does, and step 3's decoder can be reused for each piece.
+  - **Done on branch `codex/issue-52-live-text-at-pauses`:** "Live text at pauses" setting (off by default) for V3, Orukeet, Ultra and the Slovak model. Pauses of 0.5 s or more (`recognition/PauseChunker.kt`, forced cut after 15 s) end a piece; pieces reuse the SK | EN switch segments, so after Stop only the rest is decoded. No full re-decode at the end and no word-by-word growth yet. Each piece gets its own capitalization and end punctuation from the model.
 - **Idea 3, custom import.** Makes step 4 possible without a new release.
 
 ## Order and parallel work

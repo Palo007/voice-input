@@ -247,6 +247,8 @@ object AppDiagnostics {
             put("durationLimitEnabled", context.getSetting(ENABLE_30S_LIMIT))
             put("manualStopDrainMs", context.getSetting(MANUAL_STOP_DRAIN_MS))
             put("keepWarm", context.getSetting(PARAKEET_KEEP_WARM))
+            put("keepTwoWarm", context.getSetting(PARAKEET_KEEP_TWO_WARM))
+            put("liveTextAtPauses", context.getSetting(LIVE_TEXT_AT_PAUSES))
             put("cleanupEnabled", context.getSetting(S1_MINI_ENABLED))
             put("harperEnabled", context.getSetting(HARPER_ENABLED))
             put("harperExplicitEnglish", context.getSetting(HARPER_EXPLICIT_ENGLISH))

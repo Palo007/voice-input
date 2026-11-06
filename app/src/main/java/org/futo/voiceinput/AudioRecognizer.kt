@@ -30,7 +30,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -56,11 +58,13 @@ import org.futo.voiceinput.settings.MOONSHINE_MODEL_VARIANT
 import org.futo.voiceinput.settings.ASR4ALL_VARIANT
 import org.futo.voiceinput.settings.NEMOTRON_PROFILE
 import org.futo.voiceinput.settings.PARAKEET_KEEP_WARM
+import org.futo.voiceinput.settings.PARAKEET_KEEP_TWO_WARM
 import org.futo.voiceinput.settings.PARAKEET_KEEP_WARM_TIMEOUT_MS
 import org.futo.voiceinput.settings.PARAKEET_USE_VAD
 import org.futo.voiceinput.settings.PERSONAL_DICTIONARY
 import org.futo.voiceinput.settings.SPEECH_BACKEND
 import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
+import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
 import org.futo.voiceinput.settings.SpeechBackendType
 import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.parakeet.ParakeetEngineLease
@@ -74,6 +78,8 @@ import org.futo.voiceinput.recognition.RecognitionModelSelection
 import org.futo.voiceinput.recognition.DictationLanguage
 import org.futo.voiceinput.recognition.LanguageRouting
 import org.futo.voiceinput.recognition.SwitchSegments
+import org.futo.voiceinput.recognition.PauseChunker
+import org.futo.voiceinput.parakeet.ParakeetEngineManager
 import org.futo.voiceinput.recognition.RecognitionRuntimeCallbacks
 import org.futo.voiceinput.recognition.loadOrCloseOnFailure
 import org.futo.voiceinput.settings.toSpeechBackendType
@@ -89,6 +95,9 @@ private const val AUDIO_READ_SIZE = 1600
 private const val AUTO_STOP_DRAIN_MS = 100L
 private const val PARAKEET_AUTO_STOP_DRAIN_MS = 300L
 private const val FINAL_SILENCE_PAD_MS = 200
+/** How often live text at pauses looks for a finished piece. */
+private const val LIVE_TEXT_POLL_MS = 250L
+private const val LIVE_TEXT_ANALYSIS_SAMPLES = AUDIO_SAMPLE_RATE * 30
 
 internal class NoSpeechRecognizedException : Exception("The recognizer returned no text")
 
@@ -250,6 +259,8 @@ abstract class RecordingSession {
     private var recorderJob: Job? = null
     private var modelJob: Job? = null
     private var loadModelJob: Job? = null
+    /** Decodes pieces at pauses while recording (LIVE_TEXT_AT_PAUSES). Stop waits for it. */
+    private var liveTextJob: Job? = null
     private var personalVocabulary = ""
     private var backup: Pair<Long, AudioHistoryStore.Capture>? = null
     private var backupId: Pair<Long, String>? = null
@@ -414,6 +425,7 @@ abstract class RecordingSession {
         val recorderJobToJoin: Job?
         val modelJobToJoin: Job?
         val loadModelJobToJoin: Job?
+        val liveTextJobToCancel: Job?
         val backendToClose: SpeechBackend?
         val parakeetLeaseToRelease: OwnedParakeetLease?
         val backupToClose: AudioHistoryStore.Capture?
@@ -428,6 +440,8 @@ abstract class RecordingSession {
             recorderJobToJoin = recorderJob
             modelJobToJoin = modelJob
             loadModelJobToJoin = loadModelJob
+            liveTextJobToCancel = liveTextJob
+            liveTextJob = null
             backendToClose = backend
             parakeetLeaseToRelease = parakeetLease
             recorderJob = null
@@ -446,6 +460,7 @@ abstract class RecordingSession {
         recorderJobToJoin?.cancel()
         modelJobToJoin?.cancel()
         loadModelJobToJoin?.cancel()
+        liveTextJobToCancel?.cancel()
         isRecording = false
 
         clearCapturedSamples()
@@ -581,6 +596,7 @@ abstract class RecordingSession {
                 throw CancellationException("Recognition was reset while the model loaded")
             }
             (loadedBackend as? StreamingSpeechBackend)?.let(::startStreaming)
+            if (loadedBackend is ParakeetEngineLease) preloadOtherRoutedModel(loadGeneration)
             report?.event(DiagnosticEvent.MODEL_LOAD_FINISHED,
                 mapOf(DiagnosticMetric.DURATION_MS to SystemClock.elapsedRealtime() - loadStarted))
         } catch (error: CancellationException) {
@@ -732,6 +748,31 @@ abstract class RecordingSession {
         return true
     }
 
+    /**
+     * With PARAKEET_KEEP_TWO_WARM and the SK | EN button, loads the model of the other language in the
+     * background once this dictation's model is ready, so the first switch is instant too.
+     */
+    private fun preloadOtherRoutedModel(generation: Long) {
+        if (!routingAvailable || liveBenchmarkSession != null) return
+        val current = sessionSelection?.runtimeId ?: return
+        val other = switchableRuntimes?.firstOrNull { it != current } ?: return
+        lifecycleScope.launch(Dispatchers.Default) {
+            if (generation != recognitionGeneration) return@launch
+            if (!modelLifecycle.canPreload(RecognitionModelSelection(runtimeId = other))) return@launch
+            try {
+                val timeoutMs = context.getSetting(PARAKEET_KEEP_WARM_TIMEOUT_MS)
+                // Not cancelled with the dictation: a finished load must still be stored or closed.
+                withContext(NonCancellable) { ParakeetEngineManager.preload(context, other, timeoutMs) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                // Optional: a failed preload only means the switch loads the model as before.
+                if (error !is Exception && error !is OutOfMemoryError) throw error
+                Log.e("AudioRecognizer", "Preloading the other language model failed (${DiagnosticFailure.from(error).kind})")
+            }
+        }
+    }
+
     /** Keeps model deletion blocked for the model this dictation now uses. */
     private fun swapModelSession(generation: Long, model: RecognitionModel?) {
         val pendingSession = modelSessionJob
@@ -806,9 +847,13 @@ abstract class RecordingSession {
                         }
                     } finally {
                         withContext(NonCancellable) {
-                            // keepWarm = false: only one engine fits, so the old one is closed before the new load.
-                            if (oldLease != null) modelLifecycle.release(oldLease.lease, lifecycleScope)
-                            else if (oldBackend != null) modelLifecycle.release(oldBackend, lifecycleScope)
+                            if (oldLease != null) {
+                                // With one engine allowed it is closed before the new load. With two it stays
+                                // loaded, so switching back needs no reload.
+                                val keepTwo = context.getSetting(PARAKEET_KEEP_WARM) && context.getSetting(PARAKEET_KEEP_TWO_WARM)
+                                modelLifecycle.release(oldLease.lease, lifecycleScope, keepWarm = keepTwo,
+                                    timeoutMs = context.getSetting(PARAKEET_KEEP_WARM_TIMEOUT_MS))
+                            } else if (oldBackend != null) modelLifecycle.release(oldBackend, lifecycleScope)
                         }
                     }
                     // The decode above takes seconds; a reset meanwhile must not load an engine for the next dictation.
@@ -1259,6 +1304,7 @@ abstract class RecordingSession {
             // everything we just did.
             // TODO: We could check if the model exists before doing all this work
             loadModel()
+            startLiveTextAtPauses(captureGeneration)
 
             liveBenchmarkSession?.milestone("recordingStarted")
             recordingStarted()
@@ -1312,6 +1358,64 @@ abstract class RecordingSession {
         waveform.append(samples, nRead)
 
         return AppendResult.Accepted
+    }
+
+    /**
+     * Live text at pauses (issue #52, idea 2): while recording with an offline Parakeet model,
+     * decodes each piece that ends at a pause and shows the text so far. The pieces are stored like
+     * the parts before an SK | EN switch, so after Stop only the audio after the last piece is decoded.
+     */
+    private fun startLiveTextAtPauses(generation: Long) {
+        if (liveBenchmarkSession != null) return
+        val job = lifecycleScope.launch(Dispatchers.Default) {
+            if (!context.getSetting(LIVE_TEXT_AT_PAUSES)) return@launch
+            val report = diagnostics
+            while (generation == recognitionGeneration && stopReason == null && isActive) {
+                delay(LIVE_TEXT_POLL_MS)
+                if (sessionSelection?.runtimeId !in PauseChunker.OFFLINE_PARAKEET_RUNTIMES) continue
+                // Read before the backend: a tap in between then tags the piece with the old language.
+                val language = routingLanguage
+                // Null while the model loads or an SK | EN switch reloads it.
+                val pieceBackend = backendForGeneration(generation) ?: continue
+                val (start, end) = synchronized(this@RecordingSession) { segmentStart to capturedSampleCount() }
+                if (end - start < PauseChunker.MIN_CHUNK_SAMPLES) continue
+                // Only the newest audio is searched for a pause, so a long quiet stretch with no cut
+                // does not make each poll copy and scan the whole recording.
+                val windowStart = maxOf(start, end - LIVE_TEXT_ANALYSIS_SAMPLES)
+                val cut = PauseChunker.findCut(copyCapturedSamples(windowStart, end), windowStart, end) ?: continue
+                // Stop may have come during the search; do not start a new decode it would wait for.
+                if (!isActive || stopReason != null || generation != recognitionGeneration) break
+                val piece = copyCapturedSamples(start, cut)
+                // Not cancelled by Stop: the decoded piece is kept and Stop waits for it.
+                val shown = withContext(NonCancellable) {
+                    val text = try {
+                        pieceBackend.transcribe(piece)
+                    } catch (error: Throwable) {
+                        // The audio stays for the next piece or the final decode, so nothing is lost.
+                        if (error !is Exception && error !is OutOfMemoryError) throw error
+                        Log.e("AudioRecognizer", "Live text decode failed (${DiagnosticFailure.from(error).kind})")
+                        return@withContext null
+                    }
+                    synchronized(this@RecordingSession) {
+                        // An SK | EN switch takes the engine and decodes from segmentStart itself.
+                        if (generation != recognitionGeneration || segmentStart != start ||
+                            backendForGeneration(generation) !== pieceBackend) return@synchronized null
+                        decodedSegments += DecodedSegment(text, language)
+                        segmentStart = cut
+                        SwitchSegments.join(decodedSegments.map { it.text })
+                    }
+                } ?: continue
+                report?.partial(shown.length)
+                withContext(Dispatchers.Main) {
+                    if (generation == recognitionGeneration) {
+                        partialResult(PersonalVocabulary.apply(shown, personalVocabulary))
+                    }
+                }
+            }
+        }
+        synchronized(this) {
+            if (generation == recognitionGeneration) liveTextJob = job else job.cancel()
+        }
     }
 
     private fun startStreaming(backend: StreamingSpeechBackend) {
@@ -1428,6 +1532,9 @@ abstract class RecordingSession {
     private suspend fun runModelInner(runGeneration: Long, runLoadModelJob: Job?) {
         val report = diagnostics
         val savedAudioId = synchronized(this) { backupId?.takeIf { it.first == runGeneration }?.second }
+        // Stop ends the live-text loop at once; a piece already being decoded is finished and kept,
+        // so the final decode starts after it.
+        synchronized(this) { liveTextJob.takeIf { runGeneration == recognitionGeneration } }?.cancelAndJoin()
         if(runLoadModelJob != null && runLoadModelJob.isActive) {
             println("Model was not finished loading...")
             runLoadModelJob.join()

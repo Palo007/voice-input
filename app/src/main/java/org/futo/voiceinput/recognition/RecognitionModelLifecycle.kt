@@ -103,6 +103,10 @@ class RecognitionModelLifecycle(
         }
     }
 
+    /** Whether a background preload of [selection]'s engine is allowed now: installed and no model comparison. */
+    fun canPreload(selection: RecognitionModelSelection): Boolean =
+        !benchmarkOwned && runCatching { readiness(selection)?.isReady == true }.getOrDefault(false)
+
     suspend fun acquireBenchmark(): AutoCloseable = runtimeMutex.withLock {
         check(!benchmarkOwned && activeRuntimes.isEmpty() && synchronized(activeSessions) { activeSessions.isEmpty() }) {
             "Dictation or another comparison is active. Finish it before comparing models."
@@ -209,8 +213,8 @@ class RecognitionModelLifecycle(
             else -> managedRecognitionBackend(context, selection.copy(runtimeId = runtime.id))
         }
         if (!warm) {
-            // Free the warm Parakeet engine before another model needs the memory.
-            ParakeetEngineManager.warmRuntimeId()?.let { warmRuntime ->
+            // Free the warm Parakeet engines before another model needs the memory.
+            ParakeetEngineManager.warmRuntimeIds().forEach { warmRuntime ->
                 if (models.none { it.runtimeId == warmRuntime && modelInUse(it) }) releaseParakeetArtifacts(warmRuntime)
             }
             backend.loadOrCloseOnFailure { load(context) }
