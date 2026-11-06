@@ -42,7 +42,8 @@ internal object DictationEditing {
     /**
      * The capital letter to make small: the first letter of the nearest word before the cursor
      * that starts with a capital and has no other capitals. Skips all-caps and mixed words such as
-     * "USA" or "iPhone", and the pronoun "I" (also in "I'm"). Each tap moves one word further back,
+     * "USA" or "iPhone", and the pronoun "I" (also in "I'm"). An apostrophe or hyphen between
+     * letters keeps a word together, so names such as "O'Brien" or "Jean-Luc" are skipped whole. Each tap moves one word further back,
      * because the word changed last no longer starts with a capital.
      */
     fun lowercaseTarget(window: String): LowercaseTarget? {
@@ -54,12 +55,18 @@ internal object DictationEditing {
         while (i > 0) {
             if (!isWordPart(text.codePointBefore(i))) { i -= Character.charCount(text.codePointBefore(i)); continue }
             val end = i
-            while (i > 0 && isWordPart(text.codePointBefore(i))) i -= Character.charCount(text.codePointBefore(i))
+            while (i > 0) {
+                val cp = text.codePointBefore(i)
+                if (isWordPart(cp)) i -= Character.charCount(cp)
+                else if (cp < 0x10000 && cp.toChar() in WORD_JOINERS && i >= 2 && isWordPart(text.codePointBefore(i - 1))) i -= 1
+                else break
+            }
             if (i == 0 && truncated) return null
             val word = text.substring(i, end)
             val first = word.codePointAt(0)
             val capitals = word.codePoints().filter { Character.isUpperCase(it) || Character.isTitleCase(it) }.count()
-            if (word != "I" && capitals == 1L && (Character.isUpperCase(first) || Character.isTitleCase(first))) {
+            val pronounI = word == "I" || (word.length > 1 && word[0] == 'I' && word[1] in APOSTROPHES)
+            if (!pronounI && capitals == 1L && (Character.isUpperCase(first) || Character.isTitleCase(first))) {
                 val lower = Character.toLowerCase(first)
                 if (lower != first) {
                     return LowercaseTarget(text.length - i, Character.charCount(first), String(Character.toChars(lower)))
@@ -68,6 +75,10 @@ internal object DictationEditing {
         }
         return null
     }
+
+    private const val APOSTROPHES = "'\u2019\u02BC"
+    /** Apostrophes and hyphens join letters into one word: "Don't", "O'Brien", "Jean-Luc". */
+    private const val WORD_JOINERS = APOSTROPHES + "-\u2010\u2011"
 
     private fun isWordPart(cp: Int): Boolean = Character.isLetterOrDigit(cp) || when (Character.getType(cp)) {
         Character.NON_SPACING_MARK.toInt(), Character.COMBINING_SPACING_MARK.toInt() -> true

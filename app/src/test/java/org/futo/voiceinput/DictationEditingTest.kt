@@ -125,7 +125,17 @@ class DictationEditingTest {
     @Test fun lowercaseIgnoresAWordCutOffAtTheStartOfAFullWindow() {
         val window = "Phone" + " x".repeat((DictationEditing.LOWERCASE_CONTEXT_CHARS - 5) / 2 + 1)
         assertEquals(null, DictationEditing.lowercaseTarget(window))
-        // Apostrophes split words: "O'Brien" is two words, "Brien" comes first.
-        assertEquals("O'brien", lowercase("O'Brien"))
+    }
+
+    @Test fun lowercaseKeepsNamesWithApostrophesAndHyphensTogether() {
+        assertEquals("met O'Brien", lowercase("Met O'Brien"))
+        assertEquals("met Jean-Luc today", lowercase("Met Jean-Luc today"))
+        assertEquals("ask O\u2019Neil", lowercase("Ask O\u2019Neil"))
+        assertEquals("don't", lowercase("Don't"))
+        assertEquals("A well-known fact", lowercase("A Well-known fact"))
+        assertEquals("so I'll go", lowercase("So I'll go"))
+        assertEquals("so I\u2019m here", lowercase("So I\u2019m here"))
+        assertEquals("ends here - ok", lowercase("Ends here - ok"))
+        assertEquals("the end'", lowercase("The end'"))
     }
 }

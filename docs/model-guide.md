@@ -162,7 +162,7 @@ Model Options has an **Editing buttons while dictating** setting, off by default
 
 - A tap makes the text recognized so far permanent, then edits the text before the cursor. Later speech is added after it. Because the live-text pieces never change, the permanent text is never sent again or duplicated.
 - Delete one character removes one visible character, including emoji with skin tones, ZWJ sequences and flags. Delete one word removes the word with its punctuation and the spaces before it. A line break directly before the cursor is removed on its own.
-- "Aa→a" makes the nearest capitalized word before the cursor start with a small letter, at any distance. Each tap moves one word further back. It skips all-caps and mixed words such as "USA" or "iPhone", and "I". It changes only that letter, not a period before it.
+- "Aa→a" makes the nearest capitalized word before the cursor start with a small letter, at any distance. Each tap moves one word further back. It skips all-caps and mixed words such as "USA" or "iPhone", and "I". An apostrophe or hyphen keeps a word together, so names like "O'Brien" or "Jean-Luc" are skipped whole, while "Don't" becomes "don't". It changes only that letter, not a period before it.
 - "?" replaces spaces before the cursor and one trailing "." or ",", so `How are you.` becomes `How are you?`.
 - Transcript cleanup (S1 and Harper) is off for these dictations, because it would rewrite text that is already permanent. Personal vocabulary still applies.
 - The buttons are hidden for streaming models such as Nemotron, whose earlier words can still change. They are also hidden when another app opens the voice input screen directly, because there is no text field to edit.
