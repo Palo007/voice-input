@@ -156,6 +156,16 @@ same audio, correct references and the same device to compare them yourself.
 Try ordinary microphone dictation after the fixed-audio comparison. Live update
 cadence, keyboard behavior, sustained heat and battery use require that check.
 
+## Editing buttons while dictating
+
+Model Options has an **Editing buttons while dictating** setting, off by default. It needs **Live text at pauses** and one of the offline Parakeet models: TDT V3, Orukeet, Ultra or the Slovak model. With SK | EN routing, both routed models must be among them. The keyboard dictation screen then shows four buttons: delete one character, delete one word, "?" and space. They work while recording and while the final text is being decoded. Holding delete or space repeats it.
+
+- A tap makes the text recognized so far permanent, then edits the text before the cursor. Later speech is added after it. Because the live-text pieces never change, the permanent text is never sent again or duplicated.
+- Delete one character removes one visible character, including emoji with skin tones, ZWJ sequences and flags. Delete one word removes the word with its punctuation and the spaces before it. A line break directly before the cursor is removed on its own.
+- "?" replaces spaces before the cursor and one trailing "." or ",", so `How are you.` becomes `How are you?`.
+- Transcript cleanup (S1 and Harper) is off for these dictations, because it would rewrite text that is already permanent. Personal vocabulary still applies.
+- The buttons are hidden for streaming models such as Nemotron, whose earlier words can still change. They are also hidden when another app opens the voice input screen directly, because there is no text field to edit.
+
 ## Model downloads
 
 ### Whistle experimental option

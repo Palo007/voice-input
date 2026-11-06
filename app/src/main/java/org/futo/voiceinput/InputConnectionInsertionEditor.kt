@@ -42,6 +42,34 @@ internal class InputConnectionInsertionEditor(
         }
     }
 
+    override fun textBeforeCursor(max: Int): String? {
+        if (!isCurrent()) return null
+        return try {
+            connection.getTextBeforeCursor(max, 0)?.toString()
+        } catch (_: RuntimeException) {
+            null
+        }
+    }
+
+    override fun edit(deleteBefore: Int, insert: String): Boolean {
+        if (!isCurrent()) return false
+        return try {
+            connection.beginBatchEdit()
+            try {
+                // With a selection deleteBefore is 0: commitText then replaces the selection,
+                // and an empty commit just removes it.
+                val commit = insert.isNotEmpty() || deleteBefore == 0
+                (deleteBefore == 0 || connection.deleteSurroundingText(deleteBefore, 0)) &&
+                    (!commit || connection.commitText(insert, 1))
+            } finally {
+                connection.endBatchEdit()
+            }
+        } catch (_: RuntimeException) {
+            // Do not expose editor contents through the exception.
+            false
+        }
+    }
+
     override fun finishComposition(): Boolean {
         if (!isCurrent()) return false
         return try {

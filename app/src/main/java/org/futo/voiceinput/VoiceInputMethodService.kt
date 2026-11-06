@@ -210,6 +210,11 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
 
         override fun decodingStarted() = Unit
 
+        override val supportsDictationEditing: Boolean = true
+
+        override fun applyDictationEdit(edit: DictationEdit, committed: () -> Unit): Boolean =
+            inputSession.insertion?.edit(edit, committed) ?: false
+
         override fun requestPermission() {
             // We can't ask for permission from a service
             // TODO: We could launch an activity and request it that way
