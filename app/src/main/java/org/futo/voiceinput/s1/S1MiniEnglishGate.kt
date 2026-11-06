@@ -20,6 +20,7 @@ object S1MiniEnglishGate {
             SpeechBackendType.Phonon,
             SpeechBackendType.Asr4all,
             SpeechBackendType.Orukeet,
+            SpeechBackendType.ParakeetUltra,
             SpeechBackendType.Parakeet,
             SpeechBackendType.ParakeetUnified -> true
 

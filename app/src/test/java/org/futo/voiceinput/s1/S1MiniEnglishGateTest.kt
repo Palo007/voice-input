@@ -29,6 +29,13 @@ class S1MiniEnglishGateTest {
     }
 
     @Test
+    fun parakeetUltraFollowsOrukeetForEnglishCleanup() {
+        assertTrue(established(SpeechBackendType.ParakeetUltra))
+        assertFalse(established(SpeechBackendType.ParakeetUltra, forced = "sk"))
+        assertFalse(established(SpeechBackendType.ParakeetUltra, detected = "cs"))
+    }
+
+    @Test
     fun cohereRequiresAnExplicitEnglishLanguage() {
         assertTrue(established(SpeechBackendType.Cohere, detected = "en"))
         assertFalse(established(SpeechBackendType.Cohere, detected = "ar"))

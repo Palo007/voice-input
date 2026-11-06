@@ -13,7 +13,7 @@ class HarperEnglishGateTest {
     ) = HarperEnglishGate.isEstablishedEnglish(backend, detected, forced, profile, language, whisper, explicit)
 
     @Test fun multilingualModelsNeedEvidenceOrAnExplicitDeclaration() {
-        for (backend in listOf(SpeechBackendType.Orukeet, SpeechBackendType.Parakeet,
+        for (backend in listOf(SpeechBackendType.Orukeet, SpeechBackendType.ParakeetUltra, SpeechBackendType.Parakeet,
             SpeechBackendType.ParakeetRedux, SpeechBackendType.Nemotron)) {
             assertFalse(accepts(backend))
             assertTrue(accepts(backend, detected = "en"))

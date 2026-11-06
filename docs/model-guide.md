@@ -71,6 +71,7 @@ These are the options exposed by this app, not every capability of the upstream 
 | **Moonshine Small** | English | Live | Lighter English streaming option when resource use matters. | [Moonshine AI](https://github.com/moonshine-ai/moonshine) |
 | **Moonshine Medium** | English | Live | Larger English streaming option intended to favor accuracy, with greater resource use than Small. | [Moonshine AI](https://github.com/moonshine-ai/moonshine) |
 | **Parakeet TDT 0.6B V3** | 25 European languages | After Stop | NVIDIA's multilingual alternative to Orukeet, useful for comparing results on your own speech. | [NVIDIA](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) · [INT8 export](https://huggingface.co/twmht/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8) |
+| **Parakeet Ultra** | 25 European languages | After Stop | Moondream's post-trained Parakeet TDT V3; publisher results for the original weights show fewer errors than V3, especially in noise. The app uses a community 8-bit export. Same size and runtime as V3. Android speed and accuracy are not yet measured. | [Moondream](https://huggingface.co/moondream/parakeet-ultra) · [INT8 community export](https://huggingface.co/erponce/sherpa-onnx-parakeet-ultra-tdt-0.6b-v3-int8) |
 | **Parakeet Unified EN 0.6B** | English | Buffered live | Recomputes recent context for live updates. More work per update than a recognizer that reuses cached streaming state. | [Sherpa-ONNX export](https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-streaming-560ms) |
 | **Nemotron English** | English | Live | Choose Low latency, Balanced, or Accuracy profiles to trade update frequency against recognition context. | [NVIDIA](https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b) · [Sherpa-ONNX packages](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) |
 | **Nemotron 3.5 Multilingual** | 28 languages, with Auto-detect | Live | Multilingual streaming with explicit language selection or automatic detection. | [Sherpa-ONNX export](https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11) |
@@ -80,7 +81,7 @@ These are the options exposed by this app, not every capability of the upstream 
 
 Nemotron English's 80, 160, and 560 ms profile values describe audio chunks, not guaranteed end-to-end latency. Phone hardware, recording length, language, and model all affect results. Publisher benchmarks are not measurements of this Android app.
 
-See the [Redux, Ultra, and Orukeet comparison](parakeet-redux-comparison.md) for published accuracy, CPU measurements, storage, and their limits. Redux uses a pinned MIT parakeet.cpp runtime and converted CC BY 4.0 weights by Moondream, derived from NVIDIA Parakeet. Ultra is compared there but is not an app option.
+See the [Redux, Ultra, and Orukeet comparison](parakeet-redux-comparison.md) for published accuracy, CPU measurements, storage, and their limits. Redux uses a pinned MIT parakeet.cpp runtime and converted CC BY 4.0 weights by Moondream, derived from NVIDIA Parakeet. Ultra is now a separate download in the app, using a community 8-bit Sherpa-ONNX export; the published results there were measured on Moondream's original weights.
 
 Cohere download and recognition, history improvements, and the popup were manually tried on a Samsung Galaxy S25 Ultra. No comparative speed, memory, or accuracy benchmark was collected. Cohere has no automatic language detection, and mixed-language dictation can be inaccurate.
 
@@ -102,6 +103,7 @@ unknown means no comparable measurement is available, not zero usage.
 | Moonshine Small | 246.1 | 246.1 | Unknown across devices |
 | Moonshine Medium | 449.5 | 449.5 | Unknown across devices |
 | Parakeet TDT V3 | 670.5 | 670.5 | Unknown across devices |
+| Parakeet Ultra | 684.6 | 684.6 | Unknown across devices |
 | Parakeet Unified EN | 663.0 | 663.0 | Unknown across devices |
 | Nemotron English, each 80/160/560 ms profile | 463.9 | 661.9 | Unknown across devices; profiles have separate packages |
 | Nemotron 3.5 Multilingual | 682.2 | 682.2 | Unknown across devices |
@@ -197,6 +199,7 @@ against Redux and Orukeet before relying on it.
 Models download separately into app-private storage. The normal APK does not bundle weights. Network access is needed for the initial download; recognition then works offline. S1-mini is a separate optional download.
 
 - **Orukeet:** about 487 MB to download and 672 MB installed. Allow about 1.16 GB free during installation for the archive and extracted files. Interrupted downloads can resume when the server supports byte ranges.
+- **Parakeet Ultra:** about 685 MB to download and install as individual files from a revision-pinned community INT8 export, each checked by SHA-256. The export's decoder is larger than V3's because only weight matrices are quantized.
 - **Parakeet Redux:** about 213 MB to download and install, using a revision-pinned packed GGUF with SHA-256 verification. ARM dot-product support enables its NEON kernel; older ARM64 CPUs use a slower scalar fallback.
 - **Cohere:** about 2.89 GB of model files, plus working memory during recognition. Longer recordings use chunks of up to 35 seconds; words near boundaries may need checking.
 - **S1-mini:** about 484.2 MB for the pinned Q4_K_M model.

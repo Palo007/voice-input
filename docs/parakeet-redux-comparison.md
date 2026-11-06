@@ -33,7 +33,7 @@ Sources: [Moondream release post](https://moondream.ai/blog/introducing-parakeet
 | Model | Relevant storage | Published speed | Android evidence |
 | --- | --- | --- | --- |
 | Redux | Photon weights 178 MB; app's packed GGUF 213.3 MB | Photon: 113x real time on 8 EPYC 9575F cores, 38x on M2 CPU | No phone benchmark yet |
-| Ultra | Full-precision weights about 1.2 GB; converted F16 GGUF 1.442 GB, Q8 GGUF 941.5 MB | GPU-focused Photon release; parakeet.cpp reports 43.1x for Ultra Q8 on Ryzen 9950X3D in its own small CPU suite | Not integrated or benchmarked here |
+| Ultra | Full-precision weights about 1.2 GB; converted F16 GGUF 1.442 GB, Q8 GGUF 941.5 MB | GPU-focused Photon release; parakeet.cpp reports 43.1x for Ultra Q8 on Ryzen 9950X3D in its own small CPU suite | Integrated for issue #52 through Sherpa-ONNX (684.6 MB INT8 community export); not yet benchmarked on a phone |
 | Orukeet | App download 486.8 MB compressed, installed artifacts 671.7 MB | Sherpa-ONNX: median 390 ms/file on a 160-clip M5 Max sample | Existing Android backend, no matched timing here |
 
 These measurements use different machines, runtimes and recordings. Do not
@@ -66,8 +66,9 @@ under CC BY 4.0. The GGUF conversion is identified in the model's details.
 For a fair device comparison, warm both Redux and Orukeet and use the same
 recordings, threads and audio preprocessing. Measure cold load time, warm
 transcription time, peak memory and normalized WER separately. Include quiet
-dictation, noisy speech and each language actually used. Ultra would require
-an additional Android integration before it can join that test.
+dictation, noisy speech and each language actually used. Ultra is now
+available in the app (issue #52) as a community 8-bit Sherpa-ONNX export, not
+the original weights measured above, and can join that test.
 
 The initial development checkout passed 129 JVM tests and built an ARM64 debug
 APK and Android test APK. The release was then rebased onto the actual beta.5
