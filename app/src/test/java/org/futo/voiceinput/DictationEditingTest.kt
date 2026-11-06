@@ -89,4 +89,43 @@ class DictationEditingTest {
         assertEquals("?", DictationEditing.selectionReplacement(DictationEdit.QuestionMark))
         assertEquals(" ", DictationEditing.selectionReplacement(DictationEdit.Space))
     }
+
+    private fun lowercase(before: String) = apply(before, DictationEdit.Lowercase)
+
+    @Test fun lowercaseFindsTheNearestCapitalizedWordAtAnyDistance() {
+        assertEquals("home. and then", lowercase("home. And then"))
+        assertEquals("and " + "x ".repeat(300), lowercase("And " + "x ".repeat(300)))
+        assertEquals("hello world again", lowercase(lowercase(lowercase("Hello World Again"))))
+    }
+
+    @Test fun lowercaseSkipsAllCapsMixedWordsAndThePronounI() {
+        assertEquals("go to USA", lowercase("Go to USA"))
+        assertEquals("my iPhone", lowercase("My iPhone"))
+        assertEquals("so I'm here and I", lowercase("So I'm here and I"))
+        assertEquals("ok McDonald", lowercase("Ok McDonald"))
+        assertEquals("all small", lowercase("all small"))
+        assertEquals("", lowercase(""))
+    }
+
+    @Test fun lowercaseHandlesSlovakAndSingleLetters() {
+        assertEquals("doma. a potom", lowercase("doma. A potom"))
+        assertEquals("čo", lowercase("Čo"))
+        assertEquals("teraz (žilina) ešte", lowercase("teraz (Žilina) ešte"))
+        assertEquals("ok 😀", lowercase("Ok 😀"))
+    }
+
+    @Test fun lowercaseTargetsOnlyTheLetter() {
+        val target = DictationEditing.lowercaseTarget("one Two three")!!
+        assertEquals(9, target.distance)
+        assertEquals(1, target.length)
+        assertEquals("t", target.text)
+        assertEquals(null, DictationEditing.lowercaseTarget("USA I"))
+    }
+
+    @Test fun lowercaseIgnoresAWordCutOffAtTheStartOfAFullWindow() {
+        val window = "Phone" + " x".repeat((DictationEditing.LOWERCASE_CONTEXT_CHARS - 5) / 2 + 1)
+        assertEquals(null, DictationEditing.lowercaseTarget(window))
+        // Apostrophes split words: "O'Brien" is two words, "Brien" comes first.
+        assertEquals("O'brien", lowercase("O'Brien"))
+    }
 }

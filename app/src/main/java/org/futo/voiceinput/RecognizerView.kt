@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,6 +83,7 @@ import org.futo.voiceinput.recognition.LanguageRouting
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import org.futo.voiceinput.settings.LANGUAGE_TOGGLES
 import org.futo.voiceinput.settings.MANUALLY_SELECT_LANGUAGE
 import org.futo.voiceinput.settings.SETTINGS_DESTINATION_EXTRA
@@ -185,48 +187,63 @@ private fun RecognitionModelCaption(modelName: String?) {
     }
 }
 
-/** SK | EN choice for language routing. Each option is a radio button for TalkBack; [enabled] false only dims it. */
+/**
+ * SK | EN choice for language routing. Each option is a radio button for TalkBack; [enabled] false only dims it.
+ * [vertical] stacks the options in a narrow column, beside the editing buttons.
+ */
 @Composable
-fun DictationLanguageSwitch(selected: DictationLanguage, enabled: Boolean, onSelected: (DictationLanguage) -> Unit) {
+fun DictationLanguageSwitch(selected: DictationLanguage, enabled: Boolean, onSelected: (DictationLanguage) -> Unit,
+    vertical: Boolean = false, locked: Boolean = true) {
+    if (vertical) {
+        Column(
+            modifier = Modifier.width(56.dp).selectableGroup(),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+        ) { DictationLanguageOptions(selected, enabled, onSelected, Modifier.fillMaxWidth(), locked) }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp)
+                .selectableGroup(),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+        ) { DictationLanguageOptions(selected, enabled, onSelected, Modifier.padding(horizontal = 4.dp).defaultMinSize(minWidth = 64.dp), locked) }
+    }
+}
+
+@Composable
+private fun DictationLanguageOptions(selected: DictationLanguage, enabled: Boolean,
+    onSelected: (DictationLanguage) -> Unit, optionModifier: Modifier, locked: Boolean) {
     val lockedLabel = stringResource(R.string.dictation_language_locked)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp)
-            .selectableGroup(),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-    ) {
-        DictationLanguage.values().forEach { language ->
-            val isSelected = language == selected
-            val label = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_short
-                else R.string.dictation_language_en_short)
-            val description = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_description
-                else R.string.dictation_language_en_description)
-            Surface(
-                modifier = Modifier
-                    .padding(horizontal = 4.dp)
-                    .defaultMinSize(minWidth = 64.dp, minHeight = 48.dp)
-                    // Always enabled so the tap is consumed here and never reaches the tap-to-stop surface.
-                    // A locked choice is refused by the caller.
-                    .selectable(selected = isSelected, role = Role.RadioButton,
-                        onClick = { if (enabled) onSelected(language) })
-                    .semantics {
-                        contentDescription = description
-                        if (!enabled) stateDescription = lockedLabel
-                    },
-                shape = RoundedCornerShape(24.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    DictationLanguage.values().forEach { language ->
+        val isSelected = language == selected
+        val label = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_short
+            else R.string.dictation_language_en_short)
+        val description = stringResource(if (language == DictationLanguage.Slovak) R.string.dictation_language_sk_description
+            else R.string.dictation_language_en_description)
+        Surface(
+            modifier = optionModifier
+                .defaultMinSize(minHeight = 48.dp)
+                // Always enabled so the tap is consumed here and never reaches the tap-to-stop surface.
+                // A locked choice is refused by the caller.
+                .selectable(selected = isSelected, role = Role.RadioButton,
+                    onClick = { if (enabled) onSelected(language) })
+                .semantics {
+                    contentDescription = description
+                    // Locked while recording; after Stop it is simply unavailable.
+                    if (!enabled) { if (locked) stateDescription = lockedLabel else disabled() }
+                },
+            shape = RoundedCornerShape(24.dp),
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+                contentAlignment = Alignment.Center
             ) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.defaultMinSize(minWidth = 64.dp, minHeight = 48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(label, style = Typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                }
+                Text(label, style = Typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
             }
         }
     }
@@ -316,11 +333,22 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
         } else {
             RecognizeLoadingCircle(state.statusText ?: stringResource(R.string.initializing))
         }
+        val languageSwitchable = state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording
         // Also while loading and after Stop: the dictation screen is still open then.
-        onEdit?.let { DictationEditBar(it) }
+        if (onEdit != null) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (dictationLanguage != null) {
+                    // Stays after Stop, dimmed, so the editing buttons do not move under the finger.
+                    DictationLanguageSwitch(dictationLanguage,
+                        enabled = languageSwitchable && !(state.isRecording && dictationLanguageLocked),
+                        onSelected = onDictationLanguage, vertical = true, locked = languageSwitchable)
+                    Spacer(Modifier.width(8.dp))
+                }
+                DictationEditBar(onEdit, Modifier.weight(1f))
+            }
+        }
         RecognitionModelCaption(state.modelName)
-        if (dictationLanguage != null &&
-            (state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording)) {
+        if (onEdit == null && dictationLanguage != null && languageSwitchable) {
             DictationLanguageSwitch(dictationLanguage, enabled = !(state.isRecording && dictationLanguageLocked),
                 onSelected = onDictationLanguage)
         }

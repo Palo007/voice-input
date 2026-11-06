@@ -70,6 +70,21 @@ internal class InputConnectionInsertionEditor(
         }
     }
 
+    override fun replaceRange(start: Int, end: Int, text: String, cursor: Int): Boolean {
+        if (!isCurrent()) return false
+        return try {
+            connection.beginBatchEdit()
+            try {
+                connection.setSelection(start, end) && connection.commitText(text, 1) &&
+                    connection.setSelection(cursor, cursor)
+            } finally {
+                connection.endBatchEdit()
+            }
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+
     override fun finishComposition(): Boolean {
         if (!isCurrent()) return false
         return try {

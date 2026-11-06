@@ -9,6 +9,8 @@ internal interface InsertionEditor {
     fun textBeforeCursor(max: Int): String?
     /** Deletes [deleteBefore] units before the cursor, then commits [insert] over the selection, as one edit. */
     fun edit(deleteBefore: Int, insert: String): Boolean
+    /** Replaces absolute [start] until [end] with [text], then puts the cursor at absolute [cursor], as one edit. */
+    fun replaceRange(start: Int, end: Int, text: String, cursor: Int): Boolean
 }
 
 internal class InsertionSnapshot(
@@ -71,7 +73,9 @@ internal class ImeInsertionSession(
     private var composingStart = -1
     private var composingText: String? = null
     /** Selection updates our own writes will cause; editors may report them after a newer write. */
-    private data class Ack(val cursor: Int, val candidatesStart: Int, val candidatesEnd: Int)
+    private data class Ack(val selectionStart: Int, val selectionEnd: Int, val candidatesStart: Int, val candidatesEnd: Int) {
+        constructor(cursor: Int, candidatesStart: Int, candidatesEnd: Int) : this(cursor, cursor, candidatesStart, candidatesEnd)
+    }
     private val pendingAcks = mutableListOf<Ack>()
     /** Absolute cursor after the last edit while no live text composes; null when unknown. */
     private var editCursor: Int? = null
@@ -111,11 +115,17 @@ internal class ImeInsertionSession(
         editCursor = null
         val snapshot = editor.snapshot() ?: return false
         val start = minOf(snapshot.selectionStart, snapshot.selectionEnd)
+        // Live text is committed even when the edit then changes nothing, so a cursor move by the
+        // user must still end ownership from here on.
+        if (snapshot.offset >= 0 && start == maxOf(snapshot.selectionStart, snapshot.selectionEnd)) {
+            editCursor = snapshot.offset + start
+        }
+        if (edit == DictationEdit.Lowercase) return lowercase(snapshot, start)
         val plan = if (start != maxOf(snapshot.selectionStart, snapshot.selectionEnd)) {
             // Even an empty replacement removes the selection.
             DictationEditPlan(0, DictationEditing.selectionReplacement(edit))
         } else {
-            DictationEditing.plan(editor.textBeforeCursor(DictationEditing.CONTEXT_CHARS) ?: return false, edit)
+            DictationEditing.plan(editor.textBeforeCursor(DictationEditing.contextChars(edit)) ?: return false, edit)
                 .also { if (it.isNoop) return true }
         }
         if (!editor.edit(plan.deleteBefore, plan.insert)) return false
@@ -127,7 +137,33 @@ internal class ImeInsertionSession(
         return true
     }
 
+    /** Changes only the one letter where offsets are known, so links or mentions in between survive. */
+    private fun lowercase(snapshot: InsertionSnapshot, start: Int): Boolean {
+        // A selection is left alone: there is no obvious letter to change.
+        if (start != maxOf(snapshot.selectionStart, snapshot.selectionEnd)) return true
+        val before = editor.textBeforeCursor(DictationEditing.LOWERCASE_CONTEXT_CHARS) ?: return false
+        if (snapshot.offset < 0) {
+            // Without offsets the text from the letter is rewritten, which drops links and
+            // formatting in it, so only nearby letters are changed.
+            val plan = DictationEditing.plan(before, DictationEdit.Lowercase)
+            if (plan.isNoop || plan.deleteBefore > DictationEditing.CONTEXT_CHARS) return true
+            return editor.edit(plan.deleteBefore, plan.insert)
+        }
+        val target = DictationEditing.lowercaseTarget(before) ?: return true
+        val cursor = snapshot.offset + start
+        val from = cursor - target.distance
+        val after = cursor + target.text.length - target.length
+        if (!editor.replaceRange(from, from + target.length, target.text, after)) return false
+        // Editors may report each step of the batch.
+        addAck(Ack(from, from + target.length, -1, -1))
+        addAck(Ack(from + target.text.length, -1, -1))
+        addAck(Ack(after, -1, -1))
+        editCursor = after
+        return true
+    }
+
     private fun addAck(ack: Ack) {
+        if (pendingAcks.lastOrNull() == ack) return
         pendingAcks.add(ack)
         // Editors that batch notifications never report some writes; keep only recent ones.
         if (pendingAcks.size > MAX_PENDING_ACKS) pendingAcks.removeAt(0)
@@ -140,12 +176,12 @@ internal class ImeInsertionSession(
             // After an edit the next live text goes in at the cursor, so a cursor move by the user
             // ends ownership just as it does while live text composes.
             val cursor = editCursor ?: return
-            val pending = if (start == end) pendingAcks.indexOf(Ack(end, candidatesStart, candidatesEnd)) else -1
+            val pending = pendingAcks.indexOf(Ack(start, end, candidatesStart, candidatesEnd))
             if (pending >= 0) pendingAcks.subList(0, pending + 1).clear()
             else if (start != cursor || end != cursor || candidatesStart != -1 || candidatesEnd != -1) active = false
             return
         }
-        val pending = if (start == end) pendingAcks.indexOf(Ack(end, candidatesStart, candidatesEnd)) else -1
+        val pending = pendingAcks.indexOf(Ack(start, end, candidatesStart, candidatesEnd))
         val current = start == end && candidatesStart == composingStart && candidatesEnd == end &&
             end == composingStart + previous.length
         if (current || pending >= 0) {
