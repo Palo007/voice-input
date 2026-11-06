@@ -25,6 +25,9 @@
     <string name="audio_history_no_text">No saved transcript. Retranscribe this audio to recover the text.</string>
     <string name="audio_history_retranscribe">Retranscribe</string>
     <string name="audio_history_copy">Copy text</string>
+    <string name="audio_history_play">Play</string>
+    <string name="audio_history_stop_playing">Stop</string>
+    <string name="audio_history_play_failed">Could not play this recording.</string>
     <string name="audio_history_copied">Text copied</string>
     <string name="audio_history_delete">Delete</string>
     <string name="audio_history_delete_question">Delete this recording?</string>
@@ -287,6 +290,14 @@
     <string name="dynamic_light_theme_name">Dynamic Light</string>
     <string name="dynamic_dark_theme_name">Dynamic Dark</string>
     <string name="theme">Theme</string>
+    <string name="custom_theme_name">Custom colors</string>
+    <string name="custom_theme_accent">Accent color</string>
+    <string name="custom_theme_brightness">Brightness</string>
+    <string name="custom_theme_system">Follow system</string>
+    <string name="custom_theme_dark">Dark</string>
+    <string name="custom_theme_light">Light</string>
+    <string name="custom_theme_black">Black (AMOLED)</string>
+    <string name="custom_theme_done">Done</string>
     <string name="migration_screen">Migration Screen</string>
     <string name="model_update_notice">Updating your models is required to continue using FUTO Voice Input Moonshine. The old inference engine has been deprecated in March 2024, and it has now been removed, while the new inference engine brings improvements.</string>
     <string name="model_update_features_1">Better: Personal Dictionary feature\nFaster: up to ~6x faster depending on speaking length</string>
@@ -351,6 +362,8 @@
     <string name="route_by_language_description">Shows an SK | EN button on the dictation screen. SK uses Parakeet TDT V3 Slovak; EN uses your selected model. Only one model is kept in memory, so the first dictation after switching between SK and EN takes a few seconds longer while the other model loads. Your selected model does not change.</string>
     <string name="live_text_at_pauses_title">Live text at pauses</string>
     <string name="live_text_at_pauses_description">For Parakeet TDT V3, Orukeet, Parakeet Ultra and the Slovak model. While you speak, each part that ends with a short pause is transcribed and shown, so after Stop only the last part is left. Uses more battery while recording. Each part is transcribed on its own, so words across a pause may come out slightly differently than with this off.</string>
+    <string name="retranscribe_whole_recording_title">Retranscribe the whole recording at the end</string>
+    <string name="retranscribe_whole_recording_description">Needs Live text at pauses. After Stop, the whole recording is transcribed again in one piece, and that text replaces the live parts. Words across pauses come out as with Live text at pauses off, but the final text takes longer. Not used after an SK | EN switch or with Editing buttons while dictating.</string>
     <string name="edit_buttons_while_dictating_title">Editing buttons while dictating</string>
     <string name="edit_buttons_while_dictating_description">Needs Live text at pauses and Parakeet TDT V3, Orukeet, Parakeet Ultra or the Slovak model (with SK | EN, both sides). The keyboard dictation screen then shows buttons to delete a character or a word, to type \"?\" or a space, and to make the last capital letter small. A tap makes the text recognized so far permanent, and new speech is added after it. Transcript cleanup (S1 and Harper) is off for these dictations.</string>
     <string name="dictation_edit_delete_character">Delete one character</string>

@@ -20,12 +20,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.futo.voiceinput.R
 import org.futo.voiceinput.history.AudioHistoryStore
 import org.futo.voiceinput.history.audioHistory
+import org.futo.voiceinput.history.playAudioHistory
 import org.futo.voiceinput.history.retranscribeAudio
 import org.futo.voiceinput.settings.*
 import java.text.DateFormat
@@ -54,6 +56,14 @@ fun AudioHistoryScreen(navController: NavHostController) {
     var clearResult by remember { mutableStateOf<AudioHistoryStore.ClearResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var revision by remember { mutableIntStateOf(0) }
+    // Leaving the screen cancels the scope, which stops playback.
+    var playing by remember { mutableStateOf<String?>(null) }
+    var playJob by remember { mutableStateOf<Job?>(null) }
+    fun stopPlaying() {
+        playJob?.cancel()
+        playJob = null
+        playing = null
+    }
     val requestedHours = hours.toIntOrNull()?.takeIf { it in 1..720 }
 
     LaunchedEffect(retention.value) { hours = retention.value.toString() }
@@ -166,6 +176,30 @@ fun AudioHistoryScreen(navController: NavHostController) {
                                 } finally { running = null; revision++ }
                             }
                         }) { Text(stringResource(R.string.audio_history_retranscribe)) }
+                        OutlinedButton(enabled = !entry.busy && !clearing, onClick = {
+                            if (playing == entry.id) {
+                                stopPlaying()
+                                return@OutlinedButton
+                            }
+                            stopPlaying()
+                            playing = entry.id
+                            playJob = scope.launch {
+                                try {
+                                    playAudioHistory(withContext(Dispatchers.IO) { store.openAudio(entry.id) })
+                                } catch (failure: CancellationException) { throw failure
+                                } catch (failure: Exception) {
+                                    Toast.makeText(context, R.string.audio_history_play_failed, Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    if (playing == entry.id && playJob == coroutineContext[Job]) {
+                                        playing = null
+                                        playJob = null
+                                    }
+                                }
+                            }
+                        }) {
+                            Text(stringResource(if (playing == entry.id) R.string.audio_history_stop_playing
+                                else R.string.audio_history_play))
+                        }
                         TextButton(enabled = !entry.preview.isNullOrEmpty() && running == null && !clearing,
                             onClick = {
                                 scope.launch(Dispatchers.Main) {
@@ -200,6 +234,7 @@ fun AudioHistoryScreen(navController: NavHostController) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
+                    stopPlaying()
                     clearing = true
                     clearResult = null
                     error = null
@@ -225,6 +260,7 @@ fun AudioHistoryScreen(navController: NavHostController) {
             confirmButton = {
                 TextButton(onClick = {
                     deleteId = null
+                    if (playing == id) stopPlaying()
                     scope.launch {
                         try {
                             check(withContext(Dispatchers.IO) { store.delete(id) })

@@ -6,6 +6,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Files
@@ -146,6 +147,13 @@ class AudioHistoryStore(private val root: File) {
         }
         Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING,
             StandardCopyOption.ATOMIC_MOVE)
+    }
+
+    /** Raw 16 kHz mono 16-bit PCM for playback. The stream stays readable if the entry is deleted. */
+    fun openAudio(id: String): InputStream = synchronized(lock) {
+        val file = audio(id)
+        check(file.isFile) { "Recording is no longer available" }
+        file.inputStream()
     }
 
     private fun pin(id: String): Closeable = synchronized(lock) {

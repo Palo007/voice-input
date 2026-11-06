@@ -15,12 +15,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.runBlocking
+import org.futo.voiceinput.settings.CUSTOM_THEME_COLOR
+import org.futo.voiceinput.settings.CUSTOM_THEME_MODE
 import org.futo.voiceinput.settings.THEME_KEY
 import org.futo.voiceinput.settings.getSetting
 import org.futo.voiceinput.settings.useDataStoreValueNullable
+import org.futo.voiceinput.theme.presets.CustomTheme
 import org.futo.voiceinput.theme.presets.VoiceInputTheme
+import org.futo.voiceinput.theme.presets.customColorScheme
 
 val DarkColorScheme = darkColorScheme(
     primary = Slate600,
@@ -72,6 +77,23 @@ fun StatusBarColorSetter() {
     }
 }
 
+/** The theme's colors; the custom theme also follows its color and mode settings as they change. */
+@Composable
+fun rememberThemeColors(theme: ThemeOption): ColorScheme {
+    val context = LocalContext.current
+    val customColor = useDataStoreValueNullable(CUSTOM_THEME_COLOR.key, CUSTOM_THEME_COLOR.default)
+    val customMode = useDataStoreValueNullable(CUSTOM_THEME_MODE.key, CUSTOM_THEME_MODE.default)
+    // "Follow system" must recompute when dark mode changes without recreating the activity or IME.
+    val uiMode = LocalConfiguration.current.uiMode
+    return remember(theme.key, customColor, customMode, uiMode) {
+        if (theme.key == CustomTheme.key && customColor != null && customMode != null) {
+            customColorScheme(context, customColor, customMode)
+        } else {
+            theme.obtainColors(context)
+        }
+    }
+}
+
 @Composable
 fun UixThemeWrapper(colorScheme: ColorScheme, content: @Composable () -> Unit) {
     MaterialTheme(
@@ -98,7 +120,7 @@ fun UixThemeAuto(useSafeDrawingPadding: Boolean = true, content: @Composable () 
         ?: VoiceInputTheme
 
     println("Ok theme is ${theme.key}")
-    val colors = remember(theme.key) { theme.obtainColors(context) }
+    val colors = rememberThemeColors(theme)
 
     UixThemeWrapper(colorScheme = colors, {
         Box(if(useSafeDrawingPadding) {

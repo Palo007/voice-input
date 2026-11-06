@@ -65,6 +65,7 @@ import org.futo.voiceinput.settings.PERSONAL_DICTIONARY
 import org.futo.voiceinput.settings.SPEECH_BACKEND
 import org.futo.voiceinput.settings.ROUTE_BY_LANGUAGE
 import org.futo.voiceinput.settings.LIVE_TEXT_AT_PAUSES
+import org.futo.voiceinput.settings.RETRANSCRIBE_WHOLE_RECORDING
 import org.futo.voiceinput.settings.EDIT_BUTTONS_WHILE_DICTATING
 import org.futo.voiceinput.settings.SpeechBackendType
 import org.futo.voiceinput.settings.getSetting
@@ -1624,11 +1625,37 @@ abstract class RecordingSession {
         val vadEnabled = context.getSetting(IS_VAD_ENABLED) &&
             (backendType != SpeechBackendType.Parakeet || context.getSetting(PARAKEET_USE_VAD))
         val sampleCount = capturedSampleCount()
+        // Pieces already decoded at pauses (or before an SK | EN switch). Emptied when the whole
+        // recording is transcribed again below, so its text replaces them.
+        var pieces = earlierSegments
+        // Only when one model decoded every piece (no SK | EN switch) and no edit can freeze pieces.
+        val wholeRecording = earlierSegments.isNotEmpty() && runBackend !is StreamingSpeechBackend &&
+            !dictationEditing && liveBenchmarkSession == null &&
+            earlierSegments.all { it.language == routingLanguage } &&
+            context.getSetting(RETRANSCRIBE_WHOLE_RECORDING)
         val finalizeRecording: suspend () -> String = if (earlierSegments.isEmpty() || runBackend is StreamingSpeechBackend) {
             runBackend.prepareRecordingFinalization(floatSamples)
         } else {
             val rest = copyCapturedSamples(finalStart, sampleCount)
-            val decodeRest: suspend () -> String = { if (rest.isEmpty()) "" else runBackend.transcribe(rest) }
+            val decodeRest: suspend () -> String = decode@{
+                if (wholeRecording) {
+                    try {
+                        val text = runBackend.transcribe(copyCapturedSamples(0, sampleCount))
+                        // Blank whole-recording text would drop the pieces; keep them instead.
+                        if (text.isNotBlank()) {
+                            pieces = emptyList()
+                            return@decode text
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        // A long recording can be too big in one piece; the pieces are still valid.
+                        if (error !is Exception && error !is OutOfMemoryError) throw error
+                        Log.e("AudioRecognizer", "Whole-recording decode failed (${DiagnosticFailure.from(error).kind})")
+                    }
+                }
+                if (rest.isEmpty()) "" else runBackend.transcribe(rest)
+            }
             decodeRest
         }
         if (BuildConfig.DEBUG) {
@@ -1657,7 +1684,7 @@ abstract class RecordingSession {
             report?.event(DiagnosticEvent.RECOGNITION_STARTED,
                 mapOf(DiagnosticMetric.AUDIO_MS to sampleCount.toLong() * 1000 / AUDIO_SAMPLE_RATE))
             finalTail = finalizeRecording()
-            val rawText = SwitchSegments.join(earlierSegments.map { it.text } + finalTail)
+            val rawText = SwitchSegments.join(pieces.map { it.text } + finalTail)
             liveBenchmarkSession?.raw(rawText)
             if (liveBenchmarkSession != null) return@run rawText
             report?.event(DiagnosticEvent.RECOGNITION_FINISHED, mapOf(

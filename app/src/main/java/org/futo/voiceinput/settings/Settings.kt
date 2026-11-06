@@ -163,6 +163,11 @@ val ROUTE_BY_LANGUAGE = SettingsKey(booleanPreferencesKey("route_by_language"), 
 /** Offline Parakeet models decode at pauses while recording and show that text live. Off by default. */
 val LIVE_TEXT_AT_PAUSES = SettingsKey(booleanPreferencesKey("live_text_at_pauses"), false)
 /**
+ * With LIVE_TEXT_AT_PAUSES: after Stop, transcribe the whole recording again in one piece and use that
+ * text instead of the joined pieces. Skipped after an SK | EN switch and with editing buttons. Off by default.
+ */
+val RETRANSCRIBE_WHOLE_RECORDING = SettingsKey(booleanPreferencesKey("retranscribe_whole_recording"), false)
+/**
  * Delete character, delete word, "?" and space buttons on the IME dictation screen, for offline
  * Parakeet models with LIVE_TEXT_AT_PAUSES. An edit makes the live text so far permanent, and
  * transcript cleanup is skipped for these dictations. Off by default.
@@ -293,6 +298,11 @@ val THEME_KEY = SettingsKey(
     key = stringPreferencesKey("activeThemeOption"),
     default = if(BuildConfig.FLAVOR == "dev" || BuildConfig.FLAVOR == "devSameId") { DevThemeYellow.key } else { VoiceInputTheme.key }
 )
+
+/** Accent color (ARGB) of the "Custom colors" theme. */
+val CUSTOM_THEME_COLOR = SettingsKey(intPreferencesKey("custom_theme_color"), 0xFF1E88E5.toInt())
+/** Brightness of the "Custom colors" theme: "system", "dark", "light" or "black". */
+val CUSTOM_THEME_MODE = SettingsKey(stringPreferencesKey("custom_theme_mode"), "system")
 
 val BEAM_SEARCH = SettingsKey(key = booleanPreferencesKey("use_beam_search"), default = true)
 val MODELS_MIGRATED = SettingsKey(key = booleanPreferencesKey("models_migrated_1"), default = false)
