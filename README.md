@@ -1,5 +1,48 @@
 # FUTO Voice Input Moonshine
 
+## What this fork adds (Palo007 fork)
+
+This is [Palo007's fork](https://github.com/Palo007/voice-input) of
+[Today20092/voice-input](https://github.com/Today20092/voice-input), which is itself a fork of
+[FUTO Voice Input](https://github.com/futo-org/voice-input). It adds the changes below on
+top of that work. They were developed with AI assistance and tested by hand on a phone.
+Current version: **1.5.2**. Get the APK from the
+[Releases page](https://github.com/Palo007/voice-input/releases/latest).
+
+**Models and languages** (issue #52)
+- Parakeet Ultra is selectable and stays loaded between recordings.
+- A Slovak fine-tune of Parakeet TDT V3 is selectable.
+- An **SK | EN** switch picks the Slovak model or your selected model by dictation
+  language. Speech is kept if the language changes partway through a recording,
+  and quiet input is boosted.
+- Live text at pauses for offline models, and an option to keep two Parakeet models loaded.
+- Model Options lists downloaded models first in each model family.
+
+**Keyboard dictation screen**
+- Editing buttons while dictating: delete character, delete word, "?" and space.
+- A lowercase (Aa→a) button that keeps names with apostrophes and hyphens together.
+- Voice commands (new line, new paragraph, comma, period, question and exclamation
+  marks, colon, and optional "delete that" / "undo dictation") in English and Slovak.
+- Formatting that adapts to the input field: punctuation spacing and capitals.
+- Dictation goes on at the new cursor after you move the cursor or edit the field
+  while recording (1.5.2).
+- Editing bar rearranged beside the SK and EN buttons (1.5.1).
+
+**History and appearance**
+- Whole-recording retranscribe, and playback of saved recordings in history.
+- Custom theme colors.
+
+**Documentation**
+- A [recognition troubleshooting guide](docs/recognition-troubleshooting.md) with an
+  on-phone replay bench, [issue #52 notes](docs/ISSUE-52-ideas.md), and
+  [Android on-device build notes](docs/ANDROID_DEV_SETUP.md).
+
+Per-version details are in [docs/releases](docs/releases/) (see
+[1.5.0](docs/releases/v1.5.0.md), [1.5.1](docs/releases/v1.5.1.md) and
+[1.5.2](docs/releases/v1.5.2.md)). The original README of this project follows.
+
+---
+
 Offline voice typing for Android, with a choice of speech models, recoverable
 recordings, personal dictionary corrections and optional local transcript cleanup.
 
