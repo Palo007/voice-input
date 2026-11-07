@@ -50,9 +50,13 @@ import org.futo.voiceinput.theme.Typography
 private const val EDIT_REPEAT_DELAY_MS = 400L
 private const val EDIT_REPEAT_INTERVAL_MS = 75L
 
+/** Width of the small edit buttons; matches the stacked SK/EN language buttons beside them. */
+internal val DICTATION_SMALL_BUTTON_WIDTH = 56.dp
+
 /**
- * Editing buttons for the IME dictation screen. Two rows of small buttons ("Aa→a", "?", delete
- * character; a wide space bar) and a tall, highlighted delete-word button at the edge for the thumb.
+ * Editing buttons for the IME dictation screen. A narrow column ("?" over delete character) the
+ * width of the language buttons, a wide column (space bar over "Aa→a"), and a tall, highlighted
+ * delete-word button at the edge for the thumb.
  */
 @Composable
 fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modifier) {
@@ -60,17 +64,18 @@ fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modif
         modifier = modifier.height(IntrinsicSize.Min).testTag("dictation-edit-bar"),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Column(Modifier.width(DICTATION_SMALL_BUTTON_WIDTH), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            DictationEditButton(DictationEdit.QuestionMark, stringResource(R.string.dictation_edit_question_mark),
+                onEdit, Modifier.fillMaxWidth()) { EditLabel("?") }
+            DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
+                onEdit, Modifier.fillMaxWidth()) { BackspaceIcon(18) }
+        }
+        Spacer(Modifier.width(4.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                DictationEditButton(DictationEdit.Lowercase, stringResource(R.string.dictation_edit_lowercase),
-                    onEdit, Modifier.weight(1f)) { EditLabel(stringResource(R.string.dictation_edit_lowercase_short)) }
-                DictationEditButton(DictationEdit.QuestionMark, stringResource(R.string.dictation_edit_question_mark),
-                    onEdit, Modifier.weight(1f)) { EditLabel("?") }
-                DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
-                    onEdit, Modifier.weight(1f)) { BackspaceIcon(18) }
-            }
             DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space),
                 onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
+            DictationEditButton(DictationEdit.Lowercase, stringResource(R.string.dictation_edit_lowercase),
+                onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_lowercase_short)) }
         }
         Spacer(Modifier.width(6.dp))
         DictationEditButton(DictationEdit.DeleteWord, stringResource(R.string.dictation_edit_delete_word),

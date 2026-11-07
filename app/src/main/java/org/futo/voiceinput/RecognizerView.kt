@@ -196,7 +196,7 @@ fun DictationLanguageSwitch(selected: DictationLanguage, enabled: Boolean, onSel
     vertical: Boolean = false, locked: Boolean = true) {
     if (vertical) {
         Column(
-            modifier = Modifier.width(56.dp).selectableGroup(),
+            modifier = Modifier.width(DICTATION_SMALL_BUTTON_WIDTH).selectableGroup(),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
         ) { DictationLanguageOptions(selected, enabled, onSelected, Modifier.fillMaxWidth(), locked) }
     } else {
@@ -342,7 +342,7 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
                     DictationLanguageSwitch(dictationLanguage,
                         enabled = languageSwitchable && !(state.isRecording && dictationLanguageLocked),
                         onSelected = onDictationLanguage, vertical = true, locked = languageSwitchable)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(4.dp))
                 }
                 DictationEditBar(onEdit, Modifier.weight(1f))
             }
