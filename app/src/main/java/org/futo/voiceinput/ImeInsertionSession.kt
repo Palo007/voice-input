@@ -40,7 +40,11 @@ internal class InsertionFormatting(
 )
 
 /** Owns dictation across Android input callbacks, including view-only recreation. */
-internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit) {
+internal class ImeInputSessionLifecycle(
+    /** See [ImeInsertionSession.freezeLiveText]. */
+    private val freezeLiveText: () -> Boolean = { false },
+    private val resetRecognizer: () -> Unit
+) {
     var insertion: ImeInsertionSession? = null
         private set
     private var editorKey: ImeEditorKey? = null
@@ -58,7 +62,7 @@ internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit)
         if (this.connection !== connection) cancel()
         this.connection = connection
         if (!needsInitialization) return false
-        insertion = editor?.let { ImeInsertionSession(it, automaticSpacing, formatting) }
+        insertion = editor?.let { ImeInsertionSession(it, automaticSpacing, formatting, freezeLiveText) }
         needsInitialization = false
         return true
     }
@@ -85,7 +89,13 @@ internal class ImeInputSessionLifecycle(private val resetRecognizer: () -> Unit)
 internal class ImeInsertionSession(
     private val editor: InsertionEditor,
     private val automaticSpacing: Boolean = true,
-    private val formatting: InsertionFormatting? = null
+    private val formatting: InsertionFormatting? = null,
+    /**
+     * Makes the live text sent so far permanent, so later live and final text holds only newer
+     * speech. True when the recognizer supports that for this dictation; dictation then goes on at
+     * the cursor after the user moves it or edits the field. Main thread.
+     */
+    private val freezeLiveText: () -> Boolean = { false }
 ) {
     private var active = true
     private var started = false
@@ -118,19 +128,19 @@ internal class ImeInsertionSession(
      * Applies [edit] at the cursor. Live text that is still composing is first committed as it
      * stands, then [committed] runs, so the caller can stop sending that text again: later partial
      * and final results then insert only newer text at the cursor, after the edit.
-     * Without ownership (the user moved the cursor or edited the field) the edit still applies to
-     * the field, but this session stays inactive, as before.
+     * Without ownership (the user moved the cursor or edited the field) the edit still applies at
+     * the cursor, and dictation goes on from there.
      */
     fun edit(edit: DictationEdit, committed: () -> Unit): Boolean {
         val previous = composingText
-        if (previous != null && active && editor.snapshot()?.let(::ownsComposition) != true) active = false
+        val owned = previous != null && editor.snapshot()?.let(::ownsComposition) == true
         // Also clears a stale composing span from an earlier IME, which some editors skip when deleting.
         if (!editor.finishComposition()) return false
         started = true
         // The field changed by hand; "delete that" must not remove an earlier dictation now.
         formatting?.memory?.forget()
         if (previous != null) {
-            if (active) addAck(Ack(composingStart + previous.length, -1, -1))
+            if (active && owned) addAck(Ack(composingStart + previous.length, -1, -1))
             composingText = null
         }
         committed()
@@ -200,7 +210,7 @@ internal class ImeInsertionSession(
             val cursor = editCursor ?: return
             val pending = pendingAcks.indexOf(Ack(start, end, candidatesStart, candidatesEnd))
             if (pending >= 0) pendingAcks.subList(0, pending + 1).clear()
-            else if (start != cursor || end != cursor || candidatesStart != -1 || candidatesEnd != -1) active = false
+            else if (start != cursor || end != cursor || candidatesStart != -1 || candidatesEnd != -1) userMoved()
             return
         }
         val pending = pendingAcks.indexOf(Ack(start, end, candidatesStart, candidatesEnd))
@@ -211,8 +221,30 @@ internal class ImeInsertionSession(
             // committed earlier live text) after a newer one.
             if (pending >= 0) pendingAcks.subList(0, pending + 1).clear()
         } else {
-            active = false
+            userMoved()
         }
+    }
+
+    /**
+     * The user moved the cursor or edited the field. Live text is committed where it stands and,
+     * when the recognizer can stop resending it, dictation goes on at the new cursor. Otherwise
+     * this session ends, as later results would repeat the committed text.
+     */
+    private fun userMoved(): Boolean {
+        if (composingText != null && !editor.finishComposition()) {
+            active = false
+            return false
+        }
+        composingText = null
+        editCursor = null
+        pendingAcks.clear()
+        if (!freezeLiveText()) {
+            active = false
+            return false
+        }
+        // The field changed by hand; "delete that" must not remove an earlier dictation now.
+        formatting?.memory?.forget()
+        return true
     }
 
     private fun deliver(text: String, composing: Boolean, language: String?): Boolean {
@@ -234,7 +266,9 @@ internal class ImeInsertionSession(
             else from + previous.length
         if (from !in 0..snapshot.text.length || to !in from..snapshot.text.length) return false
         if (previous != null && !ownsComposition(snapshot)) {
-            active = false
+            // Live text not yet accepted is sent again after the freeze, at the new cursor. A final
+            // result already holds the committed text, so it cannot go on.
+            if (!composing || !userMoved()) active = false
             return false
         }
         // Formatting sees only the field text before the insertion point; it never leaves this method.

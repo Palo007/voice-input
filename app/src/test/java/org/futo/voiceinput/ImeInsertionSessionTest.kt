@@ -335,6 +335,64 @@ class ImeInsertionSessionTest {
         assertEquals("abc hello ", editor.text)
     }
 
+    @Test fun dictationGoesOnAtTheEndAfterTheUserDeletesAnEarlierWord() {
+        val editor = Editor()
+        var freezes = 0
+        val session = ImeInsertionSession(editor, freezeLiveText = { freezes++; true })
+        assertTrue(session.partial("one two three"))
+        // The user taps after "two", deletes it, then taps at the end again.
+        editor.finishComposition()
+        editor.start = 7; editor.end = 7
+        session.selectionChanged(7, 7, 0, 13)
+        assertEquals(1, freezes)
+        editor.text = "one  three"; editor.start = 4; editor.end = 4
+        session.selectionChanged(4, 4, -1, -1)
+        editor.start = editor.text.length; editor.end = editor.start
+        session.selectionChanged(editor.start, editor.end, -1, -1)
+        // After the freeze the recognizer sends only newer speech.
+        assertTrue(session.partial("four"))
+        assertEquals("one  three four", editor.text)
+        assertTrue(session.finish("four five", "en"))
+        assertEquals("one  three four five", editor.text)
+    }
+
+    @Test fun dictationGoesOnInsideTheSentenceAfterACursorMove() {
+        val editor = Editor()
+        val session = ImeInsertionSession(editor, freezeLiveText = { true })
+        assertTrue(session.partial("one three"))
+        editor.finishComposition()
+        editor.start = 4; editor.end = 4
+        session.selectionChanged(4, 4, -1, -1)
+        assertTrue(session.partial("two"))
+        assertEquals("one two three", editor.text)
+        assertTrue(session.finish("two", "en"))
+        assertEquals("one two three", editor.text)
+    }
+
+    @Test fun cursorMoveWithoutFreezingStillEndsTheSession() {
+        val editor = Editor()
+        val session = ImeInsertionSession(editor, freezeLiveText = { false })
+        assertTrue(session.partial("one three"))
+        session.selectionChanged(4, 4, -1, -1)
+        assertFalse(session.partial("one three two"))
+        assertEquals("one three", editor.text)
+    }
+
+    @Test fun editAfterACursorMoveKeepsDictating() {
+        val editor = Editor("abc")
+        val session = ImeInsertionSession(editor, freezeLiveText = { true })
+        assertTrue(session.partial("hello"))
+        assertTrue(session.edit(DictationEdit.Space) { })
+        editor.start = 3; editor.end = 3
+        session.selectionChanged(3, 3, -1, -1)
+        assertTrue(session.edit(DictationEdit.DeleteCharacter) { })
+        assertEquals("ab hello ", editor.text)
+        editor.start = editor.text.length; editor.end = editor.start
+        session.selectionChanged(editor.start, editor.end, -1, -1)
+        assertTrue(session.finish("more", "en"))
+        assertEquals("ab hello more", editor.text)
+    }
+
     @Test fun deleteWordReadsAWindowThatStartsInsideAnEmoji() {
         val plan = DictationEditing.plan("\uDE00" + "x".repeat(10), DictationEdit.DeleteWord)
         assertEquals(10, plan.deleteBefore)

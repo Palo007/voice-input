@@ -305,7 +305,8 @@ class VoiceInputMethodService : InputMethodService(), LifecycleOwner, ViewModelS
         }
     }
 
-    private val inputSession: ImeInputSessionLifecycle = ImeInputSessionLifecycle { recognizer.reset() }
+    private val inputSession: ImeInputSessionLifecycle = ImeInputSessionLifecycle(
+        freezeLiveText = { recognizer.freezeLiveTextForUserEdit() }) { recognizer.reset() }
     private var changingConfiguration = false
 
     override fun onStartInput(info: EditorInfo, restarting: Boolean) {

@@ -504,6 +504,14 @@ abstract class RecognizerView {
         applyDictationEdit(edit) { recognizer.freezeLiveText() }
     }
 
+    /**
+     * The user moved the cursor or edited the target field during dictation: the live text shown
+     * so far becomes permanent, so dictation can go on at the new cursor. False when this
+     * dictation cannot (the editing buttons are off for it).
+     */
+    fun freezeLiveTextForUserEdit(): Boolean =
+        dictationEditing && recognizer.isDictationEditingActive && recognizer.freezeLiveText()
+
     /** Language signals from the keyboard or the calling app; locale tags only. */
     protected open fun probeKeyboardLanguage(): DiagnosticLanguageProbe? = null
 
