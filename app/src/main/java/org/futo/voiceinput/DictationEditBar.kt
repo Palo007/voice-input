@@ -54,8 +54,8 @@ private const val EDIT_REPEAT_INTERVAL_MS = 75L
 internal val DICTATION_SMALL_BUTTON_WIDTH = 56.dp
 
 /**
- * Editing buttons for the IME dictation screen. A narrow column (space over delete character) the
- * width of the language buttons, a wide column ("Aa→a" over "."), and a tall, highlighted
+ * Editing buttons for the IME dictation screen. A narrow column (space over delete character) one
+ * and a half times the width of the language buttons, a wide column ("Aa→a" over "."), and a tall, highlighted
  * delete-word button at the edge for the thumb.
  */
 @Composable
@@ -64,7 +64,7 @@ fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modif
         modifier = modifier.height(IntrinsicSize.Min).testTag("dictation-edit-bar"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.width(DICTATION_SMALL_BUTTON_WIDTH), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.width(DICTATION_SMALL_BUTTON_WIDTH * 1.5f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space),
                 onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
             DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
