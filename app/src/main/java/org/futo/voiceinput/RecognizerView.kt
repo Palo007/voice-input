@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
 import androidx.lifecycle.LifecycleCoroutineScope
 import kotlinx.coroutines.launch
 import org.futo.voiceinput.ml.RunState
@@ -313,25 +314,39 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
     dictationLanguageLocked: Boolean = false, onEdit: ((DictationEdit) -> Unit)? = null,
     onWaveformDrawn: () -> Unit = {}) {
     if (state.phase == RecognitionUiPhase.Inactive) return
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        if (state.isRecording) {
-            if (compact) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) {
-                        InnerRecognize(state.bars, state.magnitude, compact = true, onDrawn = onWaveformDrawn)
+    // With the editing buttons, the content is widened under the window's close button; only the
+    // editing row uses that area, everything else keeps clear of the button.
+    val inset = if (onEdit != null) LocalDictationTrailingInset.current else 0.dp
+    Column(Modifier.fillMaxWidth().layout { measurable, constraints ->
+        val extra = inset.roundToPx()
+        if (extra == 0 || !constraints.hasBoundedWidth) {
+            val placeable = measurable.measure(constraints)
+            return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        }
+        val placeable = measurable.measure(constraints.copy(
+            minWidth = constraints.minWidth + extra, maxWidth = constraints.maxWidth + extra))
+        layout(placeable.width - extra, placeable.height) { placeable.place(0, 0) }
+    }.verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxWidth().padding(end = inset)) {
+            if (state.isRecording) {
+                if (compact) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f)) {
+                            InnerRecognize(state.bars, state.magnitude, compact = true, onDrawn = onWaveformDrawn)
+                        }
+                        IconButton(onClick = onFinish, modifier = Modifier.size(48.dp)) {
+                            Icon(painterResource(R.drawable.ic_stop), contentDescription = stringResource(R.string.finish_recording))
+                        }
                     }
-                    IconButton(onClick = onFinish, modifier = Modifier.size(48.dp)) {
-                        Icon(painterResource(R.drawable.ic_stop), contentDescription = stringResource(R.string.finish_recording))
-                    }
+                } else {
+                    InnerRecognize(state.bars, state.magnitude, onDrawn = onWaveformDrawn)
+                }
+                state.statusText?.let {
+                    Text(it, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 }
             } else {
-                InnerRecognize(state.bars, state.magnitude, onDrawn = onWaveformDrawn)
+                RecognizeLoadingCircle(state.statusText ?: stringResource(R.string.initializing))
             }
-            state.statusText?.let {
-                Text(it, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            }
-        } else {
-            RecognizeLoadingCircle(state.statusText ?: stringResource(R.string.initializing))
         }
         val languageSwitchable = state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording
         // Also while loading and after Stop: the dictation screen is still open then.
@@ -344,15 +359,17 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
                         onSelected = onDictationLanguage, vertical = true, locked = languageSwitchable)
                     Spacer(Modifier.width(4.dp))
                 }
-                DictationEditBar(onEdit, Modifier.weight(1f))
+                DictationEditBar(onEdit, Modifier.weight(1f), trailingExtra = inset)
             }
         }
-        RecognitionModelCaption(state.modelName)
-        if (onEdit == null && dictationLanguage != null && languageSwitchable) {
-            DictationLanguageSwitch(dictationLanguage, enabled = !(state.isRecording && dictationLanguageLocked),
-                onSelected = onDictationLanguage)
+        Column(Modifier.fillMaxWidth().padding(end = inset)) {
+            RecognitionModelCaption(state.modelName)
+            if (onEdit == null && dictationLanguage != null && languageSwitchable) {
+                DictationLanguageSwitch(dictationLanguage, enabled = !(state.isRecording && dictationLanguageLocked),
+                    onSelected = onDictationLanguage)
+            }
+            if (!compact && state.partialText.isNotBlank()) PartialDecodingResult(state.partialText)
         }
-        if (!compact && state.partialText.isNotBlank()) PartialDecodingResult(state.partialText)
     }
 }
 

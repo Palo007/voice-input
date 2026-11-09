@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -43,6 +44,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.futo.voiceinput.theme.Typography
 
@@ -54,17 +56,23 @@ private const val EDIT_REPEAT_INTERVAL_MS = 75L
 internal val DICTATION_SMALL_BUTTON_WIDTH = 56.dp
 
 /**
- * Editing buttons for the IME dictation screen. A narrow column (space over delete character) one
- * and a half times the width of the language buttons, a wide column ("Aa→a" over "."), and a tall, highlighted
- * delete-word button at the edge for the thumb.
+ * Width of the host window's close button beside the dictation content. The editing row reaches
+ * under that column, so the delete-word button extends to the right edge.
+ */
+internal val LocalDictationTrailingInset = compositionLocalOf { 0.dp }
+
+/**
+ * Editing buttons for the IME dictation screen. Two equal columns (space over delete character,
+ * "Aa→a" over ".") and a tall, highlighted delete-word button at the right edge for the thumb;
+ * it is [trailingExtra] wider to cover the area under the window's close button.
  */
 @Composable
-fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modifier) {
+fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modifier, trailingExtra: Dp = 0.dp) {
     Row(
         modifier = modifier.height(IntrinsicSize.Min).testTag("dictation-edit-bar"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.width(DICTATION_SMALL_BUTTON_WIDTH * 1.5f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space),
                 onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
             DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
@@ -79,7 +87,7 @@ fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modif
         }
         Spacer(Modifier.width(6.dp))
         DictationEditButton(DictationEdit.DeleteWord, stringResource(R.string.dictation_edit_delete_word),
-            onEdit, Modifier.width(80.dp).fillMaxHeight(), prominent = true) {
+            onEdit, Modifier.width(80.dp + trailingExtra).fillMaxHeight(), prominent = true) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 BackspaceIcon(24)
                 EditLabel(stringResource(R.string.dictation_edit_word_short))

@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -99,9 +100,13 @@ fun RecognizerInputMethodWindow(switchBack: (() -> Unit)? = null, allowClick: Bo
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
                 ConditionalUnpaidNoticeInVoiceInputWindow(switchBack)
                 Row(Modifier.fillMaxWidth().weight(1f, fill = false), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) { content() }
+                    val closeWidth = 48.dp
+                    Column(Modifier.weight(1f)) {
+                        CompositionLocalProvider(LocalDictationTrailingInset provides
+                            if (switchBack != null) closeWidth else 0.dp) { content() }
+                    }
                     if (switchBack != null) {
-                        IconButton(onClick = switchBack, modifier = Modifier.size(48.dp)) {
+                        IconButton(onClick = switchBack, modifier = Modifier.size(closeWidth)) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = stringResource(R.string.cancel),
