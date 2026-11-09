@@ -4,7 +4,7 @@ package org.futo.voiceinput
 enum class DictationEdit(val repeats: Boolean) {
     DeleteCharacter(repeats = true),
     DeleteWord(repeats = true),
-    QuestionMark(repeats = false),
+    Period(repeats = false),
     Space(repeats = true),
     /** Makes the nearest capitalized word before the cursor start with a small letter. */
     Lowercase(repeats = false)
@@ -96,7 +96,7 @@ internal object DictationEditing {
     private fun planWhole(before: String, edit: DictationEdit): DictationEditPlan = when (edit) {
         DictationEdit.DeleteCharacter -> DictationEditPlan(before.length - previousCharacterStart(before, before.length), "")
         DictationEdit.DeleteWord -> DictationEditPlan(before.length - previousWordStart(before), "")
-        DictationEdit.QuestionMark -> DictationEditPlan(before.length - questionMarkStart(before), "?")
+        DictationEdit.Period -> DictationEditPlan(before.length - punctuationStart(before), ".")
         DictationEdit.Space -> DictationEditPlan(0, " ")
         // Rewrites the text from the letter to the cursor; used only without absolute offsets.
         DictationEdit.Lowercase -> lowercaseTarget(before)?.let {
@@ -107,7 +107,7 @@ internal object DictationEditing {
     /** Like a keyboard: deleting removes the selection, inserting replaces it. */
     fun selectionReplacement(edit: DictationEdit): String = when (edit) {
         DictationEdit.DeleteCharacter, DictationEdit.DeleteWord -> ""
-        DictationEdit.QuestionMark -> "?"
+        DictationEdit.Period -> "."
         DictationEdit.Space -> " "
         DictationEdit.Lowercase -> error("Lowercase leaves a selection unchanged")
     }
@@ -159,8 +159,8 @@ internal object DictationEditing {
         return i
     }
 
-    /** "?" replaces spaces before the cursor and one trailing "." or "," (models often end with "."). */
-    fun questionMarkStart(text: String): Int {
+    /** Punctuation replaces spaces before the cursor and one trailing "." or ",", so "." never doubles. */
+    fun punctuationStart(text: String): Int {
         var i = text.length
         while (i > 0 && isHorizontalSpace(text[i - 1])) i--
         if (i > 0 && (text[i - 1] == '.' || text[i - 1] == ',')) i--

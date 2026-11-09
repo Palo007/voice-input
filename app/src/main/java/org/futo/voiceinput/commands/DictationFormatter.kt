@@ -107,8 +107,8 @@ object DictationFormatter {
             context = before.substring(0, before.length - deleteBefore)
         }
         if (final && attach == Attach.Punctuation) {
-            // Like the "?" editing button: replaces spaces and one trailing "." or ",".
-            val start = DictationEditing.questionMarkStart(context)
+            // Like the "." editing button: replaces spaces and one trailing "." or ",".
+            val start = DictationEditing.punctuationStart(context)
             deleteBefore += context.length - start
             context = context.substring(0, start)
         } else if (final && attach == Attach.Break) {

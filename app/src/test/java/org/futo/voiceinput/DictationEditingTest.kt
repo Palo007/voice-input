@@ -64,18 +64,17 @@ class DictationEditingTest {
     @Test fun emptyFieldPlansNothing() {
         assertTrue(DictationEditing.plan("", DictationEdit.DeleteCharacter).isNoop)
         assertTrue(DictationEditing.plan("", DictationEdit.DeleteWord).isNoop)
-        assertEquals("?", apply("", DictationEdit.QuestionMark))
+        assertEquals(".", apply("", DictationEdit.Period))
         assertEquals(" ", apply("", DictationEdit.Space))
     }
 
-    @Test fun questionMarkReplacesAFinalPeriodOrCommaAndSpaces() {
-        assertEquals("How are you?", apply("How are you.", DictationEdit.QuestionMark))
-        assertEquals("How are you?", apply("How are you. ", DictationEdit.QuestionMark))
-        assertEquals("Really?", apply("Really,", DictationEdit.QuestionMark))
-        assertEquals("Why?", apply("Why", DictationEdit.QuestionMark))
-        assertEquals("Wait..?", apply("Wait...", DictationEdit.QuestionMark))
-        assertEquals("What!?", apply("What!", DictationEdit.QuestionMark))
-        assertEquals("Line\n?", apply("Line\n", DictationEdit.QuestionMark))
+    @Test fun periodReplacesAFinalPeriodOrCommaAndSpaces() {
+        assertEquals("Done.", apply("Done", DictationEdit.Period))
+        assertEquals("Done.", apply("Done.", DictationEdit.Period))
+        assertEquals("Done.", apply("Done. ", DictationEdit.Period))
+        assertEquals("Wait.", apply("Wait,", DictationEdit.Period))
+        assertEquals("What!.", apply("What!", DictationEdit.Period))
+        assertEquals("Line\n.", apply("Line\n", DictationEdit.Period))
     }
 
     @Test fun spaceAppendsOneSpace() {
@@ -86,7 +85,7 @@ class DictationEditingTest {
     @Test fun selectionsAreReplacedLikeAKeyboard() {
         assertEquals("", DictationEditing.selectionReplacement(DictationEdit.DeleteCharacter))
         assertEquals("", DictationEditing.selectionReplacement(DictationEdit.DeleteWord))
-        assertEquals("?", DictationEditing.selectionReplacement(DictationEdit.QuestionMark))
+        assertEquals(".", DictationEditing.selectionReplacement(DictationEdit.Period))
         assertEquals(" ", DictationEditing.selectionReplacement(DictationEdit.Space))
     }
 

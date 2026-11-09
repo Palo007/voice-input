@@ -390,7 +390,7 @@
     <string name="edit_buttons_while_dictating_description">Needs Live text at pauses and Parakeet TDT V3, Orukeet, Parakeet Ultra or the Slovak model (with SK | EN, both sides). The keyboard dictation screen then shows buttons to delete a character or a word, to type \"?\" or a space, and to make the last capital letter small. A tap makes the text recognized so far permanent, and new speech is added after it. Transcript cleanup (S1 and Harper) is off for these dictations.</string>
     <string name="dictation_edit_delete_character">Delete one character</string>
     <string name="dictation_edit_delete_word">Delete one word</string>
-    <string name="dictation_edit_question_mark">Type a question mark</string>
+    <string name="dictation_edit_period">Type a period</string>
     <string name="dictation_edit_space">Type a space</string>
     <string name="dictation_edit_word_short">Word</string>
     <string name="dictation_edit_space_short">Space</string>

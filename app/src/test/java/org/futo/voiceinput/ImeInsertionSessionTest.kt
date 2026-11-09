@@ -267,8 +267,8 @@ class ImeInsertionSessionTest {
         assertTrue(session.edit(DictationEdit.DeleteWord) { })
         assertEquals("keep  text", editor.text)
         editor.start = 4; editor.end = 5
-        assertTrue(session.edit(DictationEdit.QuestionMark) { })
-        assertEquals("keep? text", editor.text)
+        assertTrue(session.edit(DictationEdit.Period) { })
+        assertEquals("keep. text", editor.text)
     }
 
     @Test fun editsInAnEmptyFieldChangeNothingAndDictationStillInserts() {
@@ -283,14 +283,14 @@ class ImeInsertionSessionTest {
         assertEquals(" hi", editor.text)
     }
 
-    @Test fun questionMarkReplacesTheFinalPeriodOfLiveText() {
+    @Test fun periodReplacesTheFinalCommaOfLiveText() {
         val editor = Editor()
         val session = ImeInsertionSession(editor)
-        assertTrue(session.partial("How are you."))
-        assertTrue(session.edit(DictationEdit.QuestionMark) { })
-        assertEquals("How are you?", editor.text)
-        assertTrue(session.finish("Fine.", "en"))
-        assertEquals("How are you? Fine.", editor.text)
+        assertTrue(session.partial("That is all,"))
+        assertTrue(session.edit(DictationEdit.Period) { })
+        assertEquals("That is all.", editor.text)
+        assertTrue(session.finish("Thanks.", "en"))
+        assertEquals("That is all. Thanks.", editor.text)
     }
 
     @Test fun failedCommitLeavesLiveTextComposingAndDoesNotFreeze() {

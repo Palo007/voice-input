@@ -158,12 +158,12 @@ cadence, keyboard behavior, sustained heat and battery use require that check.
 
 ## Editing buttons while dictating
 
-Model Options has an **Editing buttons while dictating** setting, off by default. It needs **Live text at pauses** and one of the offline Parakeet models: TDT V3, Orukeet, Ultra or the Slovak model. With SK | EN routing, both routed models must be among them. The keyboard dictation screen then shows five buttons: delete one character, delete one word, "?", space and "Aa→a". The SK | EN switch moves to a column on the left, and the highlighted delete-word button sits at the right edge. They work while recording and while the final text is being decoded. Holding delete or space repeats it.
+Model Options has an **Editing buttons while dictating** setting, off by default. It needs **Live text at pauses** and one of the offline Parakeet models: TDT V3, Orukeet, Ultra or the Slovak model. With SK | EN routing, both routed models must be among them. The keyboard dictation screen then shows five buttons: space, delete one character, "Aa→a", "." and delete one word. The SK | EN switch moves to a column on the left, and the highlighted delete-word button sits at the right edge. They work while recording and while the final text is being decoded. Holding delete or space repeats it.
 
 - A tap makes the text recognized so far permanent, then edits the text before the cursor. Later speech is added after it. Because the live-text pieces never change, the permanent text is never sent again or duplicated.
 - Delete one character removes one visible character, including emoji with skin tones, ZWJ sequences and flags. Delete one word removes the word with its punctuation and the spaces before it. A line break directly before the cursor is removed on its own.
 - "Aa→a" makes the nearest capitalized word before the cursor start with a small letter, at any distance. Each tap moves one word further back. It skips all-caps and mixed words such as "USA" or "iPhone", and "I". An apostrophe or hyphen keeps a word together, so names like "O'Brien" or "Jean-Luc" are skipped whole, while "Don't" becomes "don't". It changes only that letter, not a period before it.
-- "?" replaces spaces before the cursor and one trailing "." or ",", so `How are you.` becomes `How are you?`.
+- "." replaces spaces before the cursor and one trailing "." or ",", so `That is all,` becomes `That is all.` and a period is never doubled.
 - Transcript cleanup (S1 and Harper) is off for these dictations, because it would rewrite text that is already permanent. Personal vocabulary still applies.
 - The buttons are hidden for streaming models such as Nemotron, whose earlier words can still change. They are also hidden when another app opens the voice input screen directly, because there is no text field to edit.
 
