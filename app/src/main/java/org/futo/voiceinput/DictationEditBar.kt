@@ -62,8 +62,8 @@ internal val DICTATION_SMALL_BUTTON_WIDTH = 56.dp
 internal val LocalDictationTrailingInset = compositionLocalOf { 0.dp }
 
 /**
- * Editing buttons for the IME dictation screen. Two equal columns (space over delete character,
- * "Aa→a" over ".") and a tall, highlighted delete-word button at the right edge for the thumb;
+ * Editing buttons for the IME dictation screen. Two equal columns ("Aa→a" over space,
+ * delete character over ".") and a tall, highlighted delete-word button at the right edge for the thumb;
  * it is [trailingExtra] wider to cover the area under the window's close button.
  */
 @Composable
@@ -73,15 +73,15 @@ fun DictationEditBar(onEdit: (DictationEdit) -> Unit, modifier: Modifier = Modif
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            DictationEditButton(DictationEdit.Lowercase, stringResource(R.string.dictation_edit_lowercase),
+                onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_lowercase_short)) }
             DictationEditButton(DictationEdit.Space, stringResource(R.string.dictation_edit_space),
                 onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
-            DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
-                onEdit, Modifier.fillMaxWidth()) { BackspaceIcon(18) }
         }
         Spacer(Modifier.width(4.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            DictationEditButton(DictationEdit.Lowercase, stringResource(R.string.dictation_edit_lowercase),
-                onEdit, Modifier.fillMaxWidth()) { EditLabel(stringResource(R.string.dictation_edit_lowercase_short)) }
+            DictationEditButton(DictationEdit.DeleteCharacter, stringResource(R.string.dictation_edit_delete_character),
+                onEdit, Modifier.fillMaxWidth()) { BackspaceIcon(18) }
             DictationEditButton(DictationEdit.Period, stringResource(R.string.dictation_edit_period),
                 onEdit, Modifier.fillMaxWidth()) { EditLabel(".") }
         }
