@@ -396,6 +396,15 @@
     <string name="dictation_edit_space_short">Space</string>
     <string name="dictation_edit_lowercase">Make the last capital letter small</string>
     <string name="dictation_edit_lowercase_short">Aa→a</string>
+    <string name="dictation_letters_open">Show letter keys</string>
+    <string name="dictation_letters_open_short">ABC</string>
+    <string name="dictation_letters_close">Back to dictation buttons</string>
+    <string name="dictation_letters_shift">Shift</string>
+    <string name="dictation_letters_shift_off">Off</string>
+    <string name="dictation_letters_shift_once">Next letter capital</string>
+    <string name="dictation_letters_shift_locked">Caps lock</string>
+    <string name="dictation_letters_cursor_left">Move cursor left</string>
+    <string name="dictation_letters_cursor_right">Move cursor right</string>
     <string name="keep_two_models_loaded_title">Keep two models loaded</string>
     <string name="keep_two_models_loaded_description">With the SK | EN button, keeps both the Slovak model and your selected Parakeet model in memory, so switching language is instant, also while you speak. Each model is unloaded 5 minutes after its last use. Needs about 1.5 to 2 GB of free memory; on phones with little RAM, Android may close the app in the background.</string>
     <string name="route_by_language_needs_slovak">Download Parakeet TDT V3 Slovak first. Then this shows an SK | EN button on the dictation screen: SK uses the Slovak model, EN uses your selected model.</string>

@@ -1,5 +1,9 @@
 package org.futo.voiceinput
 
+import android.icu.text.BreakIterator
+import android.os.SystemClock
+import android.view.KeyCharacterMap
+import android.view.KeyEvent
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 
@@ -86,6 +90,50 @@ internal class InputConnectionInsertionEditor(
         }
     }
 
+    override fun moveCursor(forward: Boolean): Boolean {
+        if (!isCurrent()) return false
+        return try {
+            // Text on that side, outside any selection; empty at the start or end of the field.
+            val near = (if (forward) connection.getTextAfterCursor(CURSOR_CONTEXT_CHARS, 0)
+                else connection.getTextBeforeCursor(CURSOR_CONTEXT_CHARS, 0))?.toString().orEmpty()
+            val snapshot = snapshot()
+            if (snapshot != null && snapshot.offset >= 0) {
+                val start = minOf(snapshot.selectionStart, snapshot.selectionEnd)
+                val end = maxOf(snapshot.selectionStart, snapshot.selectionEnd)
+                // Like an arrow key: a selection collapses to its edge, otherwise one character.
+                val cursor = when {
+                    start != end -> if (forward) end else start
+                    forward -> start + characterStep(near, forward = true)
+                    else -> start - characterStep(near, forward = false)
+                }
+                if (start == end && cursor == start) return true
+                return connection.setSelection(snapshot.offset + cursor, snapshot.offset + cursor)
+            }
+            // Without positions an arrow key event is the fallback. Never at an end of the field:
+            // there the editor would not use it and focus could move to another field.
+            if (near.isEmpty()) return true
+            val code = if (forward) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
+            // Flags as in InputMethodService.sendDownUpKeyEvents, so the editor stays in touch mode.
+            val time = SystemClock.uptimeMillis()
+            fun key(action: Int) = KeyEvent(time, time, action, code, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0,
+                KeyEvent.FLAG_SOFT_KEYBOARD or KeyEvent.FLAG_KEEP_TOUCH_MODE)
+            connection.sendKeyEvent(key(KeyEvent.ACTION_DOWN)) && connection.sendKeyEvent(key(KeyEvent.ACTION_UP))
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+
+    /** Length of the whole character (emoji, combining marks) at the start or, backwards, end of [text]. */
+    private fun characterStep(text: String, forward: Boolean): Int {
+        if (text.isEmpty()) return 0
+        val breaks = BreakIterator.getCharacterInstance().apply { setText(text) }
+        return if (forward) {
+            breaks.following(0).let { if (it == BreakIterator.DONE) text.length else it }
+        } else {
+            text.length - breaks.preceding(text.length).let { if (it == BreakIterator.DONE) 0 else it }
+        }
+    }
+
     override fun finishComposition(): Boolean {
         if (!isCurrent()) return false
         return try {
@@ -98,5 +146,7 @@ internal class InputConnectionInsertionEditor(
 
     private companion object {
         const val FALLBACK_BEFORE_CHARS = 1024
+        /** Enough for the longest emoji sequence next to the cursor. */
+        const val CURSOR_CONTEXT_CHARS = 32
     }
 }

@@ -1,13 +1,20 @@
 package org.futo.voiceinput
 
-/** An edit the user applies from the dictation screen to the text before the cursor. */
-enum class DictationEdit(val repeats: Boolean) {
-    DeleteCharacter(repeats = true),
-    DeleteWord(repeats = true),
-    Period(repeats = false),
-    Space(repeats = true),
+/** An edit the user applies from the dictation screen at the cursor. */
+sealed class DictationEdit(val repeats: Boolean) {
+    data object DeleteCharacter : DictationEdit(repeats = true)
+    data object DeleteWord : DictationEdit(repeats = true)
+    data object Period : DictationEdit(repeats = false)
+    data object Space : DictationEdit(repeats = true)
     /** Makes the nearest capitalized word before the cursor start with a small letter. */
-    Lowercase(repeats = false)
+    data object Lowercase : DictationEdit(repeats = false)
+    /** A key of the letter keyboard: types [text] at the cursor, replacing a selection. */
+    data class Type(val text: String) : DictationEdit(repeats = false) {
+        // Typed text is editor content: keep it out of any log line that prints the edit.
+        override fun toString() = "Type"
+    }
+    /** Moves the cursor one character back or [forward], like the arrow keys. */
+    data class MoveCursor(val forward: Boolean) : DictationEdit(repeats = true)
 }
 
 /** A letter [distance] UTF-16 units before the cursor, [length] units long, becomes [text]. */
@@ -98,6 +105,9 @@ internal object DictationEditing {
         DictationEdit.DeleteWord -> DictationEditPlan(before.length - previousWordStart(before), "")
         DictationEdit.Period -> DictationEditPlan(before.length - punctuationStart(before), ".")
         DictationEdit.Space -> DictationEditPlan(0, " ")
+        is DictationEdit.Type -> DictationEditPlan(0, edit.text)
+        // Moves the cursor without changing text; applied by the editor, not as a plan.
+        is DictationEdit.MoveCursor -> DictationEditPlan(0, "")
         // Rewrites the text from the letter to the cursor; used only without absolute offsets.
         DictationEdit.Lowercase -> lowercaseTarget(before)?.let {
             DictationEditPlan(it.distance, it.text + before.substring(before.length - it.distance + it.length))
@@ -109,7 +119,9 @@ internal object DictationEditing {
         DictationEdit.DeleteCharacter, DictationEdit.DeleteWord -> ""
         DictationEdit.Period -> "."
         DictationEdit.Space -> " "
+        is DictationEdit.Type -> edit.text
         DictationEdit.Lowercase -> error("Lowercase leaves a selection unchanged")
+        is DictationEdit.MoveCursor -> error("Moving the cursor leaves the text unchanged")
     }
 
     /**

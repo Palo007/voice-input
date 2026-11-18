@@ -420,6 +420,20 @@ abstract class RecordingSession {
         isVADPaused = v
     }
 
+    /** Set while the user types on the letter keyboard: silence then does not end the recording. */
+    @Volatile private var silenceStopHeld = false
+    /** Set when the hold ends, so the silence before it does not count towards stopping. */
+    @Volatile private var silenceRestart = false
+
+    /**
+     * Holds or releases the automatic stop on silence, for typing during dictation. Speech is
+     * still recognized while held. Releasing starts the silence count again from zero.
+     */
+    fun holdSilenceStop(hold: Boolean) {
+        if (!hold && silenceStopHeld) silenceRestart = true
+        silenceStopHeld = hold
+    }
+
     fun finishRecognizerIfRecording() {
         if (isRecording) {
             finishRecognizer()
@@ -472,6 +486,8 @@ abstract class RecordingSession {
         diagnostics?.end(DiagnosticEvent.SESSION_RESET)
         diagnosticSamplingJob?.cancel()
         isVADPaused = false
+        silenceStopHeld = false
+        silenceRestart = false
         cancelCapture()
         stopAndReleaseRecorder()
         val recorderJobToJoin: Job?
@@ -1259,6 +1275,11 @@ abstract class RecordingSession {
                             // Check if mic is blocked
                             if(!anyNoiseAtAll && canMicBeBlocked && (floatSamples.position() > 2*AUDIO_SAMPLE_RATE)){
                                 isMicBlocked = true
+                            }
+
+                            if (silenceStopHeld || silenceRestart) {
+                                silenceRestart = false
+                                numConsecutiveNonSpeech = 0
                             }
 
                             // End if VAD hasn't detected speech in a while
