@@ -26,6 +26,12 @@ object PauseChunker {
     private const val MIN_SPEECH_RMS = 0.002
     /** Speech must be at least this many times louder than the background to tell pauses apart. */
     private const val MIN_CONTRAST = 4.0
+    /**
+     * The speech level is the loudest 10% of frames, but never more than the loudest 500 ms. Without
+     * this limit, a short phrase in a long quiet piece (speech under 10% of it) read as background,
+     * so the piece was never cut and its text appeared tens of seconds late.
+     */
+    private const val SPEECH_LEVEL_FRAMES = 25
 
     /**
      * Returns an absolute sample index in (from, to) where the piece [from, to) can be cut and its
@@ -46,7 +52,7 @@ object PauseChunker {
         }
         val sorted = rms.sortedArray()
         val floor = sorted[frames / 10]
-        val speech = sorted[frames * 9 / 10]
+        val speech = sorted[maxOf(frames * 9 / 10, frames - SPEECH_LEVEL_FRAMES)]
         if (speech < MIN_SPEECH_RMS) return null
 
         if (speech >= floor * MIN_CONTRAST) {

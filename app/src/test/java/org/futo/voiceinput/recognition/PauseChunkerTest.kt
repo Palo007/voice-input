@@ -74,6 +74,16 @@ class PauseChunkerTest {
     }
 
     @Test
+    fun cutsAShortPhraseAfterALongSilence() {
+        // Speech is under 10% of the piece; it must still count as speech, or the text waits
+        // until enough later speech arrives (seen as 40 s of missing live text).
+        val samples = audio(20.0 to 0f, 1.0 to 0.1f, 0.8 to 0f)
+        val cut = PauseChunker.findCut(samples, 0, samples.size)
+        assertNotNull(cut)
+        assertTrue("cut $cut should be in the final pause", cut!! >= 21 * rate)
+    }
+
+    @Test
     fun silenceIsNeverCut() {
         val samples = audio(20.0 to 0f)
         assertNull(PauseChunker.findCut(samples, 0, samples.size))
