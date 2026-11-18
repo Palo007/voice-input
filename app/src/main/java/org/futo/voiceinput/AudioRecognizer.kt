@@ -13,7 +13,6 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.MicrophoneDirection
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +20,7 @@ import android.os.SystemClock
 import android.widget.Toast
 import android.provider.Settings
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.lifecycle.LifecycleCoroutineScope
 import com.konovalov.vad.webrtc.VadWebRTC
 import com.konovalov.vad.webrtc.config.FrameSize
@@ -558,9 +558,7 @@ abstract class RecordingSession {
     protected fun openPermissionSettings() {
         val packageName = context.packageName
         val myAppSettings = Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(
-                "package:$packageName"
-            )
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()
         )
         myAppSettings.addCategory(Intent.CATEGORY_DEFAULT)
         myAppSettings.flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -573,26 +571,21 @@ abstract class RecordingSession {
     private fun focusAudio() {
         unfocusAudio()
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                focusRequest =
-                    AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-                        .build()
-                audioManager.requestAudioFocus(focusRequest!!)
-            }
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val request =
+                AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .build()
+            focusRequest = request
+            audioManager.requestAudioFocus(request)
         }catch(e: Exception) {
             Log.e("AudioRecognizer", "Recorder setup failed (${DiagnosticFailure.from(e).kind})")
         }
     }
     private fun unfocusAudio() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                if (focusRequest != null) {
-                    audioManager.abandonAudioFocusRequest(focusRequest!!)
-                }
-                focusRequest = null
-            }
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            focusRequest = null
         }catch(e: Exception) {
             Log.e("AudioRecognizer", "Recorder setup failed (${DiagnosticFailure.from(e).kind})")
         }
