@@ -1,0 +1,6 @@
+<!-- Shift key, next letter capital: a filled arrow. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FF000000" android:strokeColor="#FF000000" android:strokeWidth="1.8"
+        android:strokeLineJoin="round" android:pathData="M12,3.5L4,12.5H8.5V19.5H15.5V12.5H20Z" />
+</vector>

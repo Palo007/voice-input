@@ -312,6 +312,7 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
     onFinish: () -> Unit = {},
     dictationLanguage: DictationLanguage? = null, onDictationLanguage: (DictationLanguage) -> Unit = {},
     dictationLanguageLocked: Boolean = false, onEdit: ((DictationEdit) -> Unit)? = null,
+    lettersOpen: Boolean = false, onLettersOpen: ((Boolean) -> Unit)? = null,
     onWaveformDrawn: () -> Unit = {}) {
     if (state.phase == RecognitionUiPhase.Inactive) return
     // With the editing buttons, the content is widened under the window's close button; only the
@@ -350,7 +351,10 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
         }
         val languageSwitchable = state.phase == RecognitionUiPhase.Loading || state.phase == RecognitionUiPhase.Recording
         // Also while loading and after Stop: the dictation screen is still open then.
-        if (onEdit != null) {
+        if (onEdit != null && lettersOpen && onLettersOpen != null) {
+            // Replaces the language and editing buttons; the microphone keeps listening.
+            DictationLetterKeyboard(onEdit, onClose = { onLettersOpen(false) }, Modifier.padding(top = 4.dp))
+        } else if (onEdit != null) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (dictationLanguage != null) {
                     // Stays after Stop, dimmed, so the editing buttons do not move under the finger.
@@ -359,7 +363,7 @@ fun RecognitionContent(state: RecognitionUiState, compact: Boolean = false,
                         onSelected = onDictationLanguage, vertical = true, locked = languageSwitchable)
                     Spacer(Modifier.width(4.dp))
                 }
-                DictationEditBar(onEdit, Modifier.weight(1f), trailingExtra = inset)
+                DictationEditBar(onEdit, Modifier.weight(1f), onOpenLetters = onLettersOpen?.let { { it(true) } })
             }
         }
         Column(Modifier.fillMaxWidth().padding(end = inset)) {
@@ -514,6 +518,14 @@ abstract class RecognizerView {
     protected open fun applyDictationEdit(edit: DictationEdit, committed: () -> Unit): Boolean = false
     /** The editing buttons are shown for this dictation (EDIT_BUTTONS_WHILE_DICTATING and a supported model). */
     private var dictationEditing by mutableStateOf(false)
+    /** The letter keyboard replaces the editing buttons; each dictation starts without it. */
+    private var lettersOpen by mutableStateOf(false)
+
+    /** Typing takes longer than a pause in speech, so silence does not stop recording meanwhile. */
+    private fun showLetters(open: Boolean) {
+        lettersOpen = open
+        recognizer.holdSilenceStop(open)
+    }
 
     private fun dictationEdit(edit: DictationEdit) {
         // Committing live text is only safe while the recognizer will stop resending it.
@@ -570,12 +582,14 @@ abstract class RecognizerView {
                 onClose = { recognizer.cancelRecognizer() },
                 onFinish = { finishRecognizerIfRecording() },
                 onPauseVAD = { if (state.isRecording) recognizer.pauseVAD(it) },
-                allowClick = state.isRecording
+                // With the letter keys open, a near miss above them must not stop dictation; Stop still does.
+                allowClick = state.isRecording && !lettersOpen
             ) {
                 RecognitionContent(state, compact = compact, onFinish = { finishRecognizerIfRecording() },
                     dictationLanguage = dictationLanguage, onDictationLanguage = ::selectDictationLanguage,
                     dictationLanguageLocked = dictationLanguageLocked,
-                    onEdit = if (dictationEditing) ::dictationEdit else null) {
+                    onEdit = if (dictationEditing) ::dictationEdit else null,
+                    lettersOpen = lettersOpen, onLettersOpen = ::showLetters) {
                     if (firstWaveformFrame && state.bars.isNotEmpty()) {
                         firstWaveformFrame = false
                         recognizer.waveformDrawn()
@@ -870,6 +884,7 @@ abstract class RecognizerView {
     fun reset() {
         presentation = presentation.end()
         dictationEditing = false
+        lettersOpen = false
         detectedLanguage = null
         recognizer.reset()
     }

@@ -87,6 +87,17 @@ class DictationEditingTest {
         assertEquals("", DictationEditing.selectionReplacement(DictationEdit.DeleteWord))
         assertEquals(".", DictationEditing.selectionReplacement(DictationEdit.Period))
         assertEquals(" ", DictationEditing.selectionReplacement(DictationEdit.Space))
+        assertEquals("ž", DictationEditing.selectionReplacement(DictationEdit.Type("ž")))
+    }
+
+    @Test fun letterKeysTypeAtTheCursor() {
+        assertEquals("helo", apply("hel", DictationEdit.Type("o")))
+        assertEquals("Ľ", apply("", DictationEdit.Type("Ľ")))
+    }
+
+    @Test fun cursorMovesLeaveTheTextAlone() {
+        assertTrue(DictationEditing.plan("text", DictationEdit.MoveCursor(forward = false)).isNoop)
+        assertTrue(DictationEditing.plan("text", DictationEdit.MoveCursor(forward = true)).isNoop)
     }
 
     private fun lowercase(before: String) = apply(before, DictationEdit.Lowercase)

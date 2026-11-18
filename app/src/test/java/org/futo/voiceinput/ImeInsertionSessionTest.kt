@@ -37,6 +37,14 @@ class ImeInsertionSessionTest {
             this.end = cursor
             return true
         }
+        var cursorMoves = 0
+        override fun moveCursor(forward: Boolean): Boolean {
+            cursorMoves++
+            val cursor = if (forward) maxOf(start, end) + 1 else minOf(start, end) - 1
+            start = cursor.coerceIn(0, text.length)
+            end = start
+            return true
+        }
         override fun edit(deleteBefore: Int, insert: String): Boolean {
             writes++
             if (!accepts) return false
@@ -281,6 +289,46 @@ class ImeInsertionSessionTest {
         assertEquals(" ", editor.text)
         assertTrue(session.finish("hi", "en"))
         assertEquals(" hi", editor.text)
+    }
+
+    @Test fun typedLettersFollowLiveTextAndDictationGoesOnAfterThem() {
+        val editor = Editor()
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.partial("the quick brown"))
+        var commits = 0
+        assertTrue(session.edit(DictationEdit.DeleteCharacter) { commits++ })
+        assertTrue(session.edit(DictationEdit.Type("w")) { commits++ })
+        assertTrue(session.edit(DictationEdit.Type("n")) { commits++ })
+        assertEquals(3, commits)
+        assertEquals("the quick browwn", editor.text)
+        assertTrue(session.finish("fox", "en"))
+        assertEquals("the quick browwn fox", editor.text)
+    }
+
+    @Test fun typedLetterReplacesTheSelection() {
+        val editor = Editor("cat", 1, 2)
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.edit(DictationEdit.Type("u")) { })
+        assertEquals("cut", editor.text)
+    }
+
+    @Test fun cursorMoveCommitsLiveTextAndDictationGoesOnAtTheNewCursor() {
+        val editor = Editor()
+        val session = ImeInsertionSession(editor)
+        assertTrue(session.partial("helo"))
+        var commits = 0
+        assertTrue(session.edit(DictationEdit.MoveCursor(forward = false)) { commits++ })
+        assertEquals(1, commits)
+        assertEquals(-1, editor.composingStart)
+        assertEquals(1, editor.cursorMoves)
+        // The editor reports the moved cursor; it is not taken as a user edit that ends dictation.
+        session.selectionChanged(3, 3, -1, -1)
+        assertTrue(session.edit(DictationEdit.Type("l")) { })
+        assertEquals("hello", editor.text)
+        assertTrue(session.edit(DictationEdit.MoveCursor(forward = true)) { })
+        session.selectionChanged(5, 5, -1, -1)
+        assertTrue(session.finish("world", "en"))
+        assertEquals("hello world", editor.text)
     }
 
     @Test fun periodReplacesTheFinalCommaOfLiveText() {

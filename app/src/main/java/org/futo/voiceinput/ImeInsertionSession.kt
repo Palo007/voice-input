@@ -16,6 +16,8 @@ internal interface InsertionEditor {
     fun edit(deleteBefore: Int, insert: String): Boolean
     /** Replaces absolute [start] until [end] with [text], then puts the cursor at absolute [cursor], as one edit. */
     fun replaceRange(start: Int, end: Int, text: String, cursor: Int): Boolean
+    /** Moves the cursor one character back or [forward], as an arrow key does. */
+    fun moveCursor(forward: Boolean): Boolean = false
 }
 
 internal class InsertionSnapshot(
@@ -145,6 +147,8 @@ internal class ImeInsertionSession(
         }
         committed()
         editCursor = null
+        // The editor moves the cursor; later live text goes in wherever it ends up.
+        if (edit is DictationEdit.MoveCursor) return editor.moveCursor(edit.forward)
         val snapshot = editor.snapshot() ?: return false
         val start = minOf(snapshot.selectionStart, snapshot.selectionEnd)
         // Live text is committed even when the edit then changes nothing, so a cursor move by the
