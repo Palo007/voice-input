@@ -15,7 +15,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.futo.voiceinput.BuildConfig
 import org.futo.voiceinput.backend.SpeechBackend
+import org.futo.voiceinput.recognition.LatinScript
 import org.futo.voiceinput.recognition.RecognitionModel
+import org.futo.voiceinput.settings.LATIN_SCRIPT_ONLY
 import org.futo.voiceinput.settings.PARAKEET_ENGINE_DIAGNOSTICS
 import org.futo.voiceinput.settings.getSetting
 import java.io.File
@@ -30,7 +32,8 @@ internal interface ParakeetDecoder {
 
 class ParakeetBackend internal constructor(
     private val decoderFactory: (Context) -> ParakeetDecoder = { SherpaParakeetDecoder(it) },
-    private var decoder: ParakeetDecoder? = null
+    private var decoder: ParakeetDecoder? = null,
+    private val latinScheme: LatinScript.Scheme = LatinScript.Scheme.English
 ) : SpeechBackend {
     private companion object {
         const val DIAGNOSTICS_TAG = "ParakeetDiagnostics"
@@ -42,8 +45,13 @@ class ParakeetBackend internal constructor(
     @Volatile
     private var diagnosticsEnabled = false
 
-    internal suspend fun configureDiagnostics(context: Context) {
+    @Volatile
+    private var latinScriptOnly = true
+
+    /** Reads the settings that apply per recording; called on load and each time a warm engine is acquired. */
+    internal suspend fun configure(context: Context) {
         diagnosticsEnabled = context.getSetting(PARAKEET_ENGINE_DIAGNOSTICS)
+        latinScriptOnly = context.getSetting(LATIN_SCRIPT_ONLY)
     }
 
     internal fun logEngineAcquired(warm: Boolean, elapsedMs: Long) {
@@ -53,7 +61,7 @@ class ParakeetBackend internal constructor(
     }
 
     override suspend fun load(context: Context) = withContext(Dispatchers.IO) {
-        configureDiagnostics(context)
+        configure(context)
         mutex.withLock {
             if (decoder == null) decoder = decoderFactory(context.applicationContext)
         }
@@ -67,7 +75,9 @@ class ParakeetBackend internal constructor(
         }
         try {
             mutex.withLock {
-                decoderOrThrow().transcribe(InputLevel.normalize(samples)).also { result ->
+                decoderOrThrow().transcribe(InputLevel.normalize(samples)).let { text ->
+                    if (latinScriptOnly) LatinScript.toLatin(text, latinScheme) else text
+                }.also { result ->
                     if (diagnosticsEnabled) {
                         val outcome = if (result.isBlank()) "no_speech" else "text"
                         Log.i(
@@ -105,7 +115,8 @@ internal fun parakeetUltraBackend(): ParakeetBackend = ParakeetBackend(
 )
 
 internal fun parakeetSlovakBackend(): ParakeetBackend = ParakeetBackend(
-    decoderFactory = { SherpaParakeetDecoder(it, ParakeetSlovakModel.recognitionModel, featureDim = 128) }
+    decoderFactory = { SherpaParakeetDecoder(it, ParakeetSlovakModel.recognitionModel, featureDim = 128) },
+    latinScheme = LatinScript.Scheme.Slovak
 )
 
 private class SherpaParakeetDecoder(

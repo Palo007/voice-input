@@ -29,6 +29,19 @@ class ParakeetBackendTest {
     }
 
     @Test
+    fun cyrillicOutputIsSpelledInLatinLetters() = runBlocking {
+        val decoder = object : ParakeetDecoder {
+            override fun transcribe(samples: FloatArray) = "It стопс стриминг"
+            override fun close() = Unit
+        }
+        val english = ParakeetBackend(decoderFactory = { decoder }, decoder = decoder)
+        assertEquals("It stops striming", english.transcribe(floatArrayOf(0.1f)))
+        val slovak = ParakeetBackend(decoderFactory = { decoder }, decoder = decoder,
+            latinScheme = org.futo.voiceinput.recognition.LatinScript.Scheme.Slovak)
+        assertEquals("It stops striming", slovak.transcribe(floatArrayOf(0.1f)))
+    }
+
+    @Test
     fun orukeetPackageIncludesPinnedWeightsAndNotices() {
         val model = OrukeetModel.recognitionModel
         assertEquals("orukeet", model.runtimeId)

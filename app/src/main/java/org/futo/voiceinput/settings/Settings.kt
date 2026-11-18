@@ -177,6 +177,11 @@ val EDIT_BUTTONS_WHILE_DICTATING = SettingsKey(booleanPreferencesKey("edit_butto
 val VOICE_COMMANDS_ENABLED = SettingsKey(booleanPreferencesKey("voice_commands_enabled"), false)
 /** "delete that" and "undo dictation"; also needs VOICE_COMMANDS_ENABLED. Off by default. */
 val VOICE_COMMANDS_DESTRUCTIVE = SettingsKey(booleanPreferencesKey("voice_commands_destructive"), false)
+/**
+ * Parakeet models spell Cyrillic letters in Latin letters ("стопс" -> "stops"). Multilingual V3 models
+ * sometimes write accented English in Cyrillic; English and Slovak dictation never need it. On by default.
+ */
+val LATIN_SCRIPT_ONLY = SettingsKey(booleanPreferencesKey("latin_script_only"), true)
 /** Remembered SK | EN choice ("sk" or "en"), the last manual tap on the dictation screen. */
 val DICTATION_LANGUAGE = SettingsKey(stringPreferencesKey("dictation_language"), "en")
 val PARAKEET_ENGINE_DIAGNOSTICS =

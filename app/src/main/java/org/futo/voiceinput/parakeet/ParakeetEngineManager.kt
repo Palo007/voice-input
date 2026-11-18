@@ -83,7 +83,7 @@ object ParakeetEngineManager {
             if (existing != null) {
                 existing.unloadJob?.cancel()
                 existing.unloadJob = null
-                existing.backend.configureDiagnostics(context)
+                existing.backend.configure(context)
                 existing.backend.logEngineAcquired(warm = true, elapsedMs = (System.nanoTime() - startedAt) / 1_000_000)
                 return@withLock newLease(existing)
             }

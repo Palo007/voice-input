@@ -396,6 +396,8 @@
     <string name="dictation_edit_space_short">Space</string>
     <string name="dictation_edit_lowercase">Make the last capital letter small</string>
     <string name="dictation_edit_lowercase_short">Aa→a</string>
+    <string name="latin_script_only_title">Latin letters only</string>
+    <string name="latin_script_only_description">Parakeet Ultra and the Slovak model sometimes write a few English words in Cyrillic letters (\"стопс\" for \"stops\"). This spells such words in Latin letters. Turn it off only if you dictate Russian, Ukrainian or Bulgarian.</string>
     <string name="keep_two_models_loaded_title">Keep two models loaded</string>
     <string name="keep_two_models_loaded_description">With the SK | EN button, keeps both the Slovak model and your selected Parakeet model in memory, so switching language is instant, also while you speak. Each model is unloaded 5 minutes after its last use. Needs about 1.5 to 2 GB of free memory; on phones with little RAM, Android may close the app in the background.</string>
     <string name="route_by_language_needs_slovak">Download Parakeet TDT V3 Slovak first. Then this shows an SK | EN button on the dictation screen: SK uses the Slovak model, EN uses your selected model.</string>
