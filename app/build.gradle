@@ -203,7 +203,8 @@ android {
     }
     lint {
         // Compose's detector crashes under this project's Kotlin/UAST versions.
-        disable 'MutableCollectionMutableState'
+        // The current lint does not load it (UnknownIssueId); keep the guard for when it does.
+        disable 'MutableCollectionMutableState', 'UnknownIssueId'
     }
     buildFeatures {
         buildConfig true

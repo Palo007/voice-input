@@ -1,6 +1,7 @@
 package org.futo.voiceinput.settings.pages
 
 import androidx.compose.foundation.layout.Column
+import androidx.core.content.edit
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.selection.selectable
@@ -500,7 +501,7 @@ private fun SelectedRecognitionModelNotice() {
                 Button(onClick = { context.startRecognitionModelDownloadActivity(successor) }) { Text("Update model") }
                 TextButton(onClick = {
                     dismissed.value = true
-                    key?.let { preferences.edit().putBoolean(it, true).apply() }
+                    key?.let { preferences.edit { putBoolean(it, true) } }
                     RecognitionModelLifecycle.publishChange()
                 }) { Text("Keep installed version") }
             }

@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.widget.Toast
 import org.futo.voiceinput.downloader.DownloadActivity
 import org.futo.voiceinput.settings.ENGLISH_MODEL_INDEX
@@ -160,7 +160,7 @@ fun <T> Context.startAppActivity(activity: Class<T>, clearTop: Boolean = false) 
 
 fun Context.openURI(uri: String, newTask: Boolean = false) {
     try {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+        val intent = Intent(Intent.ACTION_VIEW, uri.toUri())
         if (newTask) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
