@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -191,7 +192,7 @@ private fun WhisperLanguagesScreen(navController: NavHostController) {
             val subtitle = if (language.trainedHourCount < 1000) {
                 stringResource(R.string.may_be_low_accuracy_x_hours, language.trainedHourCount)
             } else {
-                stringResource(R.string.trained_on_x_hours, language.trainedHourCount)
+                pluralStringResource(R.plurals.trained_on_x_hours, language.trainedHourCount, language.trainedHourCount)
             }
 
             // Only show languages trained with over 1000 hours for now, as anything lower

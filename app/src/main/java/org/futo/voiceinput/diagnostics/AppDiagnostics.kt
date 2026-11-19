@@ -1,5 +1,6 @@
 package org.futo.voiceinput.diagnostics
 
+import org.futo.voiceinput.downloader.allocatableBytes
 import android.app.ActivityManager
 import android.app.Application
 import android.content.ClipData
@@ -223,7 +224,7 @@ object AppDiagnostics {
         put("sdk", Build.VERSION.SDK_INT)
         put("abis", Build.SUPPORTED_ABIS.joinToString(","))
         put("processors", Runtime.getRuntime().availableProcessors())
-        put("availableStorageBytes", context.filesDir.usableSpace)
+        put("availableStorageBytes", context.allocatableBytes(context.filesDir))
         put("collectionEnabled", collectionEnabled())
         put("detailedRemainingMs", detailedRemainingMs())
         put("processExitHistorySupported", Build.VERSION.SDK_INT >= 30)

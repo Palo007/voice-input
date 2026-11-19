@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -101,7 +102,7 @@ fun PaymentText(verbose: Boolean) {
 
     // Doesn't make sense to say "You've been using for ... days" if it's less than seven days
     if(numDaysInstalled.value >= 7) {
-        ParagraphText(stringResource(R.string.payment_text_1, numDaysInstalled.value))
+        ParagraphText(pluralStringResource(R.plurals.payment_text_1, numDaysInstalled.value, numDaysInstalled.value))
     } else {
         ParagraphText(stringResource(R.string.payment_text_1_alt))
     }

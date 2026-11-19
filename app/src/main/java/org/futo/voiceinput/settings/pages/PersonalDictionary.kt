@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -137,7 +138,11 @@ fun PersonalDictionaryEditor(disabled: Boolean, showTitle: Boolean = true) {
                             } else error = R.string.dictionary_too_large
                         }, enabled = !reading, modifier = Modifier.fillMaxWidth(), minLines = 5, maxLines = 10)
                     } else {
-                        Text(stringResource(R.string.dictionary_preview_count, result.additions.size, result.duplicates, result.invalid.size))
+                        Text(listOf(
+                            pluralStringResource(R.plurals.dictionary_preview_new_entries, result.additions.size, result.additions.size),
+                            pluralStringResource(R.plurals.dictionary_preview_duplicates_skipped, result.duplicates, result.duplicates),
+                            pluralStringResource(R.plurals.dictionary_preview_invalid_entries, result.invalid.size, result.invalid.size)
+                        ).joinToString(" · "))
                         Text(result.additions.take(100).joinToString("\n"))
                         if (result.additions.size > 100) Text(stringResource(R.string.dictionary_preview_truncated))
                         if (result.invalid.isNotEmpty()) {

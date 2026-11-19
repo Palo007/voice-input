@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -369,7 +370,7 @@ fun DownloadScreen(models: List<ModelInfo> = EXAMPLE_MODELS, onRetry: (() -> Uni
         Spacer(modifier = Modifier.height(8.dp))
 
         if (installing == null && !activationPending) Text(
-            stringResource(R.string.download_file_count, finishedCount, models.size),
+            pluralStringResource(R.plurals.download_file_count, models.size, finishedCount, models.size),
             modifier = Modifier.padding(16.dp, 0.dp),
             style = Typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
@@ -445,9 +446,22 @@ class DownloadActivity : ComponentActivity() {
         }
     }
 
+    private var reservingSpace = false
+
     private fun startDownload() {
-        if (confirmation?.hasEnoughSpace == false) return
+        if (confirmation?.hasEnoughSpace == false || reservingSpace) return
         lifecycleScope.launch {
+            // Free clearable cache first when the files only fit after Android clears it.
+            confirmation?.requiredFreeSpaceBytes?.let { required ->
+                reservingSpace = true
+                try {
+                    withContext(Dispatchers.IO) { reserveBytes(filesDir, required) }
+                } finally {
+                    reservingSpace = false
+                }
+            }
+            // The user may have cancelled while Android was clearing cache.
+            if (isFinishing || isDestroyed) return@launch
             startConfirmedDownload()
         }
     }
@@ -821,7 +835,8 @@ class DownloadActivity : ComponentActivity() {
                 requiredFreeSpaceBytes = (intent.getLongExtra(EXTRA_REQUIRED_FREE_SPACE, transferBytes) -
                     (archiveToDownload?.let { savedArchive(it).length().coerceAtMost(transferBytes) } ?: 0L))
                     .coerceAtLeast(0L),
-                availableBytes = filesDir.usableSpace,
+                // Cheap first value; the IO block below adds clearable cache.
+                availableBytes = usableBytes(filesDir),
                 cellular = isCellularNetwork()
             )
         }
@@ -835,8 +850,10 @@ class DownloadActivity : ComponentActivity() {
                     }
                     confirmation = confirmation?.let {
                         it.copy(requiredFreeSpaceBytes = (it.requiredFreeSpaceBytes - retained).coerceAtLeast(0L),
-                            availableBytes = filesDir.usableSpace)
+                            availableBytes = allocatableBytes(filesDir))
                     }
+                } else {
+                    confirmation = confirmation?.copy(availableBytes = allocatableBytes(filesDir))
                 }
                 if (archiveToDownload != null && incomplete.isNotEmpty()) {
                     listOf(requireNotNull(archiveToDownload))

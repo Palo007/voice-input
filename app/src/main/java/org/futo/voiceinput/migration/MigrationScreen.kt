@@ -7,7 +7,7 @@ import android.app.Activity
 import android.app.job.JobScheduler
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -254,9 +254,7 @@ class MigrationActivity : ComponentActivity() {
     private fun openSettings() {
         val packageName = applicationContext.packageName
         val myAppSettings = Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(
-                "package:$packageName"
-            )
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri()
         )
         myAppSettings.addCategory(Intent.CATEGORY_DEFAULT)
         myAppSettings.flags = Intent.FLAG_ACTIVITY_NEW_TASK

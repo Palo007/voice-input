@@ -48,7 +48,6 @@
     <string name="suppress_non_speech_annotations">Suppress non-speech annotations</string>
     <string name="suppress_non_speech_annotations_subtitle">[cough], [music], etc</string>
     <string name="re_enable_30s_limit">Re-enable legacy 30-second limit</string>
-    <string name="testing_menu">Testing Menu</string>
     <string name="verbose_mode">Verbose Mode</string>
     <string name="go">Go</string>
     <string name="navigate_back">Navigate back</string>
@@ -91,18 +90,11 @@
     <string name="help_paragraph_9">Some non-keyboard apps also support voice input! Look for a voice button in Firefox, Organic Maps, etc.</string>
     <string name="help_with_email">Report issues or suggestions on the GitHub issue tracker for this fork using the buttons below. Feedback posted there is public.</string>
     <string name="multilingual_enabled_english_will_be_slower">Multilingual enabled</string>
-    <string name="using_smaller_models_accuracy_may_be_worse">Using smaller models, accuracy may be worse</string>
-    <string name="using_smaller_model_accuracy_may_be_worse">Using smaller model, accuracy may be worse</string>
-    <string name="using_larger_models_speed_may_be_slower">Using larger models, speed may be slower</string>
-    <string name="using_larger_model_speed_may_be_slower">Using larger model, speed may be slower</string>
-    <string name="using_non_default_models">Using non-default models</string>
-    <string name="using_non_default_model">Using non-default model</string>
     <string name="futo_voice_input_settings">FUTO Voice Input Moonshine Settings</string>
     <string name="help">Help</string>
     <string name="languages">Languages</string>
     <string name="model">Model</string>
     <string name="sounds">Sounds</string>
-    <string name="animations">Animations</string>
     <string name="will_play_a_sound_when_started_cancelled">Will play a sound when started / cancelled</string>
     <string name="will_not_play_sounds_when_started_cancelled">Will not play sounds when started / cancelled</string>
     <string name="payment">Payment</string>
@@ -123,7 +115,6 @@
     <string name="catching_up">Catching up…</string>
     <string name="initializing">Initializing…</string>
     <string name="cancel">Cancel</string>
-    <string name="futo_logo">FUTO Logo</string>
     <string name="enable_ime_body">To integrate with existing keyboards, you need to enable the Voice Input Method.</string>
     <string name="open_input_method_settings">Open Input Method Settings</string>
     <string name="step_1_of_2">Step 1 of 2</string>
@@ -138,50 +129,16 @@
     <string name="intent_result_is_null_or_empty">Intent result is null or empty</string>
     <string name="intent_was_cancelled">Intent was cancelled</string>
     <string name="unknown_intent_result">Unknown intent result</string>
-    <string name="model_picker">Model Picker</string>
     <string name="model_options">Model Options</string>
     <string name="parameter_count_tip">Tip: The number is the model\'s parameter count in millions. More parameters = slower and more accurate</string>
-    <string name="english_model">English Model</string>
-    <string name="multilingual_model">Multilingual Model</string>
-    <string name="parakeet_model">Parakeet Model</string>
-    <string name="parakeet_model_active_subtitle">Parakeet TDT English active</string>
-    <string name="parakeet_unified_model_active_subtitle">Parakeet Unified English installed</string>
-    <string name="parakeet_unified_model_download_required">Parakeet Unified English download required</string>
-    <string name="parakeet_unified_model_name">Parakeet TDT English</string>
-    <string name="parakeet_unified_model_status">Active backend. Model files download on first use.</string>
-    <string name="parakeet_packaged_model_tip">Parakeet is the active recognizer in this fork. The old English and multilingual model choices below are kept for now but are not used for transcription.</string>
-    <string name="parakeet_model_download_required">Download required</string>
-    <string name="parakeet_model_downloaded">Downloaded and active</string>
-    <string name="parakeet_download_model_tip">English-only model with punctuation and capitalization. Optimized for offline and streaming ASR.</string>
-    <string name="parakeet_download_required_title">Download Required</string>
     <string name="parakeet_download_required_body">The Parakeet speech model must be downloaded before voice input can run. This may incur data fees on mobile data.</string>
-    <string name="parakeet_unified_download_required_body">The Parakeet Unified streaming model must be downloaded before voice input can run. This may incur data fees on mobile data.</string>
-    <string name="nemotron_download_required_body">The Nemotron streaming model must be downloaded before voice input can run. This may incur data fees on mobile data.</string>
-    <string name="nemotron_model_active_subtitle">Nemotron English %1$s active</string>
-    <string name="nemotron_model_download_required">Nemotron English %1$s download required</string>
-    <string name="parakeet_english_only_tip">The selected Parakeet model supports English only.</string>
     <string name="download_model">Download Model</string>
-    <string name="speech_backend">Speech Backend</string>
-    <string name="backend_parakeet">Parakeet TDT English</string>
-    <string name="backend_moonshine">Moonshine v2 Streaming</string>
-    <string name="backend_whisper_ggml">Whisper/GGML</string>
-    <string name="backend_parakeet_subtitle">English-only Parakeet backend using ONNX Runtime</string>
-    <string name="backend_whisper_ggml_subtitle">Legacy Whisper backend using GGML models</string>
-    <string name="whisper_model_download_required">Download required</string>
     <string name="whisper_download_required_body">The selected Whisper model must be downloaded before voice input can run. This may incur data fees on mobile data.</string>
-    <string name="whisper_ggml_model_active_subtitle">Whisper/GGML model active</string>
-    <string name="moonshine_model">Moonshine Model</string>
-    <string name="moonshine_model_active_subtitle">Moonshine v2 Streaming active</string>
-    <string name="moonshine_balanced">Balanced</string>
-    <string name="moonshine_higher_accuracy">Higher accuracy</string>
-    <string name="moonshine_small_description">Moonshine v2 Small Streaming English (~245 MB)</string>
-    <string name="moonshine_medium_description">Moonshine v2 Medium Streaming English (~429 MB)</string>
-    <string name="moonshine_model_option_subtitle">%1$s — %2$s</string>
-    <string name="moonshine_model_download_required">Download required</string>
-    <string name="moonshine_model_downloaded">Downloaded</string>
-    <string name="moonshine_download_model_tip">Low-latency English transcription that updates while you speak. The model remains offline after download.</string>
     <string name="moonshine_download_required_body">The Moonshine streaming model must be downloaded before voice input can run. This may incur data fees on mobile data.</string>
-    <string name="payment_text_1">You\'ve been using FUTO Voice Input Moonshine for <xliff:g name="days" example="30">%d</xliff:g> days. If you find this app useful, please consider paying to support future development of FUTO software.</string>
+    <plurals name="payment_text_1">
+        <item quantity="one">You\'ve been using FUTO Voice Input Moonshine for <xliff:g name="days" example="1">%d</xliff:g> day. If you find this app useful, please consider paying to support future development of FUTO software.</item>
+        <item quantity="other">You\'ve been using FUTO Voice Input Moonshine for <xliff:g name="days" example="30">%d</xliff:g> days. If you find this app useful, please consider paying to support future development of FUTO software.</item>
+    </plurals>
     <string name="payment_text_1_alt">Thank you for trying out FUTO Voice Input Moonshine! If you find this app useful, please consider paying to support future development of FUTO software.</string>
     <string name="payment_dev_notice">NOTE: Development has largely shifted to FUTO Keyboard and this app is not expected to receive any major updates at this time. Nevertheless, we would appreciate your support.</string>
     <string name="payment_text_2">FUTO is dedicated to making good software that doesn\'t abuse you. This app will never serve you ads or collect your personal data.</string>
@@ -199,7 +156,6 @@
     <string name="i_already_paid_2">I already paid (tap again)</string>
     <string name="remind_me_in_x">"Remind me in "</string>
     <string name="in_x_days">" days"</string>
-    <string name="developer_mode_payment_methods">You are on the Developer release, so you are seeing all payment methods</string>
     <string name="download_required">Download Required</string>
     <string name="download_required_body">To continue, one or more speech recognition model resources need to be downloaded. This may incur data fees if you\'re using mobile data instead of Wi-Fi</string>
     <string name="download_source">Source: %1$s</string>
@@ -210,7 +166,10 @@
     <string name="download_insufficient_space">Not enough storage. Available: %1$s</string>
     <string name="download_failed">Download of one or more resources has failed. Please make sure you\'re connected to a network, the app has network permission, or try again later.</string>
     <string name="download_in_progress">Downloading model resources…</string>
-    <string name="download_file_count">Downloaded %1$d of %2$d files</string>
+    <plurals name="download_file_count">
+        <item quantity="one">Downloaded %1$d of %2$d file</item>
+        <item quantity="other">Downloaded %1$d of %2$d files</item>
+    </plurals>
     <string name="update_available">Update Available</string>
     <string name="update_available_notification">An update is available (<xliff:g name="versionDiff" example="v1 -> v2">%s</xliff:g>). Tap to download</string>
     <string name="pay_now">Pay Now</string>
@@ -222,7 +181,10 @@
     <string name="language_tip_2">Some languages may work better than others, depending on the amount of training data.</string>
     <string name="language_tip_3">You can configure multilingual model switching behavior in the Input Options section</string>
     <string name="may_be_low_accuracy_x_hours">May be low accuracy (<xliff:g name="hourCount" example="1">%d</xliff:g>h)</string>
-    <string name="trained_on_x_hours">Trained on <xliff:g name="hourCount" example="1">%d</xliff:g> hours</string>
+    <plurals name="trained_on_x_hours">
+        <item quantity="one">Trained on <xliff:g name="hourCount" example="1">%d</xliff:g> hour</item>
+        <item quantity="other">Trained on <xliff:g name="hourCount" example="100">%d</xliff:g> hours</item>
+    </plurals>
     <string name="input_testing">Input testing</string>
     <string name="payment_error">Payment Error</string>
     <string name="help_title">Help</string>
@@ -235,8 +197,6 @@
     <string name="change_default_voice_input">Change default Voice Input</string>
     <string name="try_out_voice_input">Try out Voice Input</string>
     <string name="wrong_voice_input_text">If the wrong voice input is being used, you may need to disable the other one here.</string>
-    <string name="options">Options</string>
-    <string name="miscellaneous">Miscellaneous</string>
     <string name="advanced">Advanced</string>
     <string name="about">About</string>
     <string name="having_trouble">Having trouble?</string>
@@ -255,7 +215,6 @@
     <string name="issue_tracker">Public Issue Tracker</string>
     <string name="contact_support">Contact Support</string>
     <string name="only_language_enabled">Enable another language to disable this one</string>
-    <string name="input_options">Input</string>
     <string name="stop_on_silence">Automatically stop on silence</string>
     <string name="stop_on_silence_info">If you speak with pauses, you may wish to disable the option below. You can also pause automatic stopping temporarily by tapping and holding.</string>
     <string name="end_of_speech_profile">End-of-speech timing</string>
@@ -321,7 +280,18 @@
     <string name="dictionary_add_multiple">Add multiple entries</string>
     <string name="dictionary_import_file">Import text file</string>
     <string name="dictionary_preview">Preview additions</string>
-    <string name="dictionary_preview_count">%1$d new entries · %2$d duplicates skipped · %3$d invalid entries</string>
+    <plurals name="dictionary_preview_new_entries">
+        <item quantity="one">%d new entry</item>
+        <item quantity="other">%d new entries</item>
+    </plurals>
+    <plurals name="dictionary_preview_duplicates_skipped">
+        <item quantity="one">%d duplicate skipped</item>
+        <item quantity="other">%d duplicates skipped</item>
+    </plurals>
+    <plurals name="dictionary_preview_invalid_entries">
+        <item quantity="one">%d invalid entry</item>
+        <item quantity="other">%d invalid entries</item>
+    </plurals>
     <string name="dictionary_preview_truncated">Showing the first 100 additions. All new entries will be added.</string>
     <string name="dictionary_invalid_entries">Fix these entries before adding. Mappings need one =&gt; with text on both sides; control characters are not allowed. Showing up to 10 invalid entries.</string>
     <string name="dictionary_edit_import">Edit imported text</string>

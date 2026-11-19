@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.lifecycle.lifecycleScope
@@ -87,10 +88,12 @@ fun RecognizeWindow(forceNoUnpaidNotice: Boolean = false, allowClick: Boolean = 
             val bgIconTint = MaterialTheme.colorScheme.outline
 
             Column(modifier = Modifier.drawBehind {
+                // Drawn larger than the drawable's declared size (lint caps vectors at 200dp).
+                val iconSize = Size(240.dp.toPx(), 240.dp.toPx())
                 with(icon) {
-                    translate(left = -icon.intrinsicSize.width/2, top = -icon.intrinsicSize.height/2) {
+                    translate(left = -iconSize.width/2, top = -iconSize.height/2) {
                         translate(left = size.width / 4, top = size.height / 3) {
-                            draw(icon.intrinsicSize, colorFilter = ColorFilter.tint(bgIconTint))
+                            draw(iconSize, colorFilter = ColorFilter.tint(bgIconTint))
                         }
                     }
                 }

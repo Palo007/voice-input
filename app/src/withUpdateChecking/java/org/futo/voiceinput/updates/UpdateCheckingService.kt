@@ -7,8 +7,7 @@ import android.app.job.JobParameters
 import android.app.job.JobService
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
+import androidx.core.net.toUri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
@@ -33,20 +32,17 @@ class UpdateCheckingService : JobService() {
                         Context.NOTIFICATION_SERVICE
                     ) as NotificationManager
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val channel = NotificationChannel(
-                            CHANNEL_ID,
-                            "Update Notifications",
-                            NotificationManager.IMPORTANCE_MIN
-                        )
-
-                        manager.createNotificationChannel(channel)
-                    }
+                    val channel = NotificationChannel(
+                        CHANNEL_ID,
+                        "Update Notifications",
+                        NotificationManager.IMPORTANCE_MIN
+                    )
+                    manager.createNotificationChannel(channel)
 
                     val contentIntent = PendingIntent.getActivity(
                         applicationContext,
                         0,
-                        Intent(Intent.ACTION_VIEW, Uri.parse(updateResult.apkUrl)),
+                        Intent(Intent.ACTION_VIEW, updateResult.apkUrl.toUri()),
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
 

@@ -1,5 +1,6 @@
 package org.futo.voiceinput
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,9 +17,11 @@ import android.os.Looper
 /** Controls only this recorder. Device names/addresses are never exposed to diagnostics or UI. */
 @Suppress("DEPRECATION")
 class AndroidMicrophonePlatform(
-    private val context: Context,
+    context: Context,
     private val recorder: AudioRecord
 ) : MicrophonePlatform {
+    // Application context: the static owner below must not keep an Activity or IME alive.
+    private val context: Context = context.applicationContext
     private val audio = context.getSystemService(AudioManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
     private var closed = false
@@ -30,6 +33,8 @@ class AndroidMicrophonePlatform(
 
     companion object {
         // Activity and IME can overlap in one process. An old session must not clear a new request.
+        // Holds only the application context, and clear() resets it when the session ends.
+        @SuppressLint("StaticFieldLeak")
         private var owner: AndroidMicrophonePlatform? = null
     }
 

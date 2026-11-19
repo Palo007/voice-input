@@ -62,6 +62,7 @@
             android:enableOnBackInvokedCallback="true"
             android:exported="true"
             android:launchMode="singleTask"
+            tools:targetApi="33"
             android:theme="@style/Theme.WhisperVoiceInput" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -150,11 +151,13 @@
                 android:resource="@xml/s1_file_paths" />
         </provider>
 
-        <!-- Workaround for https://github.com/futo-org/voice-input/issues/17 -->
+        <!-- Workaround for https://github.com/futo-org/voice-input/issues/17
+             Exported so other apps can discover it; onBind returns null, so there is nothing to protect. -->
         <service
             android:name=".DummyService"
             android:exported="true"
-            android:label="">
+            android:label=""
+            tools:ignore="ExportedService">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />
                 <category android:name="android.intent.category.TEST" />
