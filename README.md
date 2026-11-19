@@ -6,7 +6,7 @@ This is [Palo007's fork](https://github.com/Palo007/voice-input) of
 [Today20092/voice-input](https://github.com/Today20092/voice-input), which is itself a fork of
 [FUTO Voice Input](https://github.com/futo-org/voice-input). It adds the changes below on
 top of that work. They were developed with AI assistance and tested by hand on a phone.
-Current version: **1.5.2**. Get the APK from the
+Current version: **1.6.0**. Get the APK from the
 [Releases page](https://github.com/Palo007/voice-input/releases/latest).
 
 **Models and languages** (issue #52)
@@ -28,7 +28,7 @@ Current version: **1.5.2**. Get the APK from the
   while recording (1.5.2).
 - Editing bar rearranged beside the SK and EN buttons (1.5.1).
 
-**Since 1.5.2 (not yet released)**
+**1.6.0**
 - Letter keys while dictating: an ABC button opens a QWERTY keyboard with shift,
   Slovak and Czech accents and digits on long-press, and cursor arrows. Dictation keeps running.
 - The "?" button is replaced by a "." button that does not double a period. The editing
@@ -52,8 +52,8 @@ Current version: **1.5.2**. Get the APK from the
   [Android on-device build notes](docs/ANDROID_DEV_SETUP.md).
 
 Per-version details are in [docs/releases](docs/releases/) (see
-[1.5.0](docs/releases/v1.5.0.md), [1.5.1](docs/releases/v1.5.1.md) and
-[1.5.2](docs/releases/v1.5.2.md)). The original README of this project follows.
+[1.5.0](docs/releases/v1.5.0.md), [1.5.1](docs/releases/v1.5.1.md),
+[1.5.2](docs/releases/v1.5.2.md) and [1.6.0](docs/releases/v1.6.0.md)). The original README of this project follows.
 
 ---
 
