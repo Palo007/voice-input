@@ -18,6 +18,14 @@ class LetterKeyboardLayoutTest {
         assertTrue(LetterKeyboardLayout.accentsFor('q').isEmpty())
     }
 
+    @Test fun topRowOffersDigitsBeforeAccents() {
+        assertEquals("1234567890", LetterKeyboardLayout.rows[0].map { LetterKeyboardLayout.alternativesFor(it).first() }.joinToString(""))
+        assertEquals(listOf("3", "é", "ě"), LetterKeyboardLayout.alternativesFor('e'))
+        assertEquals(listOf("1"), LetterKeyboardLayout.alternativesFor('q'))
+        assertEquals(listOf("á", "ä"), LetterKeyboardLayout.alternativesFor('a'))
+        assertTrue(LetterKeyboardLayout.alternativesFor('m').isEmpty())
+    }
+
     @Test fun shiftCapitalizesOneLetterOrLocks() {
         assertEquals("a", LetterShift.Off.apply("a"))
         assertEquals("Ô", LetterShift.Once.apply("ô"))

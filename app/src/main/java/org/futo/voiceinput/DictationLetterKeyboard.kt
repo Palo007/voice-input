@@ -90,7 +90,13 @@ internal object LetterKeyboardLayout {
         'o' to "óô", 'r' to "ŕř", 's' to "š", 't' to "ť", 'u' to "úů", 'y' to "ý", 'z' to "ž"
     )
 
+    /** Digits on the top row, like a phone keyboard: q is 1 through p is 0. */
+    private val digits = rows[0].zip("1234567890").toMap()
+
     fun accentsFor(letter: Char): List<String> = accents[letter]?.map { it.toString() }.orEmpty()
+
+    /** Long-press options: the top row's digit first (selected when the row opens), then the accents. */
+    fun alternativesFor(letter: Char): List<String> = listOfNotNull(digits[letter]?.toString()) + accentsFor(letter)
 
     /**
      * Which of [count] long-press options is under the finger at [x] (key-local), when each option
@@ -119,7 +125,8 @@ private val KEY_INSET = 2.dp
  * Letter keyboard on the dictation screen, for fixing a few letters without leaving dictation.
  * Keys type at the cursor through [onEdit] like the other editing buttons, so the live text so far
  * is kept and later speech goes in after the typed letters. [onClose] returns to the editing buttons.
- * Long-pressing a letter offers its Slovak and Czech accented forms; slide to one and release.
+ * Long-pressing a letter offers its top-row digit, then its Slovak and Czech accented forms; slide to
+ * one and release.
  */
 @Composable
 fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
@@ -132,7 +139,8 @@ fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit
     fun tap() { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
     fun type(text: String) {
         currentOnEdit(DictationEdit.Type(shift.apply(text)))
-        shift = shift.afterLetter()
+        // A digit leaves a one-letter shift for the next letter.
+        if (text.any { it.isLetter() }) shift = shift.afterLetter()
     }
     fun edit(edit: DictationEdit) { tap(); currentOnEdit(edit) }
 
@@ -224,7 +232,7 @@ private fun RowScope.ActionKey(
 }
 
 /**
- * One letter: types on release, or after a long press offers [LetterKeyboardLayout.accentsFor] through
+ * One letter: types on release, or after a long press offers [LetterKeyboardLayout.alternativesFor] through
  * [showAccents]; sliding picks one and releasing types it. The whole cell is the touch area.
  */
 @Composable
@@ -234,7 +242,7 @@ private fun RowScope.LetterKey(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    val accents = remember(letter) { LetterKeyboardLayout.accentsFor(letter) }
+    val accents = remember(letter) { LetterKeyboardLayout.alternativesFor(letter) }
     val view = LocalView.current
     val currentOnType by rememberUpdatedState(onType)
     val currentOnPressDown by rememberUpdatedState(onPressDown)
@@ -304,7 +312,7 @@ private fun RowScope.LetterKey(
             Box(contentAlignment = Alignment.Center) {
                 Text(label, fontSize = 20.sp, maxLines = 1, softWrap = false)
                 if (accents.isNotEmpty()) {
-                    // A hint that a long press offers accented letters.
+                    // A hint that a long press offers more: the digit, or else the first accented letter.
                     Text(shift.apply(accents.first()), fontSize = 9.sp, maxLines = 1,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.align(Alignment.TopEnd).padding(top = 1.dp, end = 3.dp))
