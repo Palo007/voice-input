@@ -1,6 +1,7 @@
 package org.futo.voiceinput.recognition
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -109,5 +110,32 @@ class PauseChunkerTest {
     @Test
     fun offlineRuntimesExcludeStreamingModels() {
         assertEquals(setOf("parakeet", "orukeet", "parakeet_ultra", "parakeet_sk"), PauseChunker.OFFLINE_PARAKEET_RUNTIMES)
+    }
+
+    @Test
+    fun silentTailAfterSpeechNeedsNoDecode() {
+        val reference = audio(2.0 to 0.1f, 0.5 to 0f)
+        assertTrue(PauseChunker.isSilentTail(reference, audio(0.6 to 0f)))
+        assertTrue(PauseChunker.isSilentTail(reference, FloatArray(0)))
+    }
+
+    @Test
+    fun aWordInTheTailIsDecoded() {
+        val reference = audio(2.0 to 0.1f, 0.5 to 0f)
+        assertFalse(PauseChunker.isSilentTail(reference, audio(0.4 to 0f, 0.3 to 0.1f)))
+        // A quieter word than the reference speech still counts.
+        assertFalse(PauseChunker.isSilentTail(reference, audio(0.4 to 0f, 0.3 to 0.02f)))
+    }
+
+    @Test
+    fun aShortClickIsNotSpeech() {
+        val reference = audio(2.0 to 0.1f, 0.5 to 0f)
+        assertTrue(PauseChunker.isSilentTail(reference, audio(0.3 to 0f, 0.02 to 0.1f, 0.3 to 0f)))
+    }
+
+    @Test
+    fun withoutClearSpeechInTheReferenceTheTailIsDecoded() {
+        assertFalse(PauseChunker.isSilentTail(audio(2.0 to 0f), audio(0.5 to 0f)))
+        assertFalse(PauseChunker.isSilentTail(audio(0.5 to 0.1f), audio(0.5 to 0f)))
     }
 }
