@@ -41,15 +41,7 @@ object PauseChunker {
         val length = to - from
         if (length < MIN_CHUNK_SAMPLES) return null
         val frames = length / FRAME_SAMPLES
-        val rms = DoubleArray(frames) { frame ->
-            var sum = 0.0
-            val start = frame * FRAME_SAMPLES
-            for (i in start until start + FRAME_SAMPLES) {
-                val s = samples[i].toDouble()
-                sum += s * s
-            }
-            sqrt(sum / FRAME_SAMPLES)
-        }
+        val rms = frameRms(samples, frames)
         val sorted = rms.sortedArray()
         val floor = sorted[frames / 10]
         val speech = sorted[maxOf(frames * 9 / 10, frames - SPEECH_LEVEL_FRAMES)]
@@ -80,6 +72,40 @@ object PauseChunker {
         if (length < MAX_CHUNK_SAMPLES) return null
         // No pause for 15 s: cut at the quietest point in the second before the last 200 ms.
         return SwitchSegments.quietCut(samples, from, to - 10 * FRAME_SAMPLES).takeIf { it > from }
+    }
+
+    /** A tail with fewer loud frames than this (60 ms) holds no word, only clicks or breath. */
+    private const val MAX_TAIL_SPEECH_FRAMES = 3
+
+    /**
+     * True when [tail], the audio left after the last decoded piece, holds no speech, so Stop can
+     * deliver the text already shown without waiting to decode it. [reference] is earlier audio of
+     * the same recording that holds speech; its levels tell speech from the room. When the levels
+     * cannot be told apart, the tail counts as speech and is decoded as usual.
+     */
+    fun isSilentTail(reference: FloatArray, tail: FloatArray): Boolean {
+        val referenceFrames = reference.size / FRAME_SAMPLES
+        if (referenceFrames < MIN_CHUNK_SAMPLES / FRAME_SAMPLES) return false
+        val rms = frameRms(reference, referenceFrames)
+        rms.sort()
+        val floor = rms[referenceFrames / 10]
+        val speech = rms[maxOf(referenceFrames * 9 / 10, referenceFrames - SPEECH_LEVEL_FRAMES)]
+        if (speech < MIN_SPEECH_RMS || speech < floor * MIN_CONTRAST) return false
+        val quiet = minOf(sqrt(maxOf(floor, 1e-6) * speech), speech / 4)
+        // A partial last frame is checked too: the end of the tail is where a new word would be.
+        val tailFrames = (tail.size + FRAME_SAMPLES - 1) / FRAME_SAMPLES
+        return frameRms(tail, tailFrames).count { it >= quiet } < MAX_TAIL_SPEECH_FRAMES
+    }
+
+    private fun frameRms(samples: FloatArray, frames: Int) = DoubleArray(frames) { frame ->
+        val start = frame * FRAME_SAMPLES
+        val end = minOf(start + FRAME_SAMPLES, samples.size)
+        var sum = 0.0
+        for (i in start until end) {
+            val s = samples[i].toDouble()
+            sum += s * s
+        }
+        sqrt(sum / (end - start))
     }
 
     /** Runtimes whose offline engine can decode pieces while recording. */

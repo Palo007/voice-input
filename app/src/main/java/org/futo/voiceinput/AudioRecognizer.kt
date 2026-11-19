@@ -342,6 +342,19 @@ abstract class RecordingSession {
     @Synchronized
     private fun copyCapturedSamples(from: Int, to: Int): FloatArray = floatSamples.array().copyOfRange(from, to)
 
+    /**
+     * True when live text already shows everything spoken: pieces were decoded and the audio after
+     * the last one holds no speech. Stop then skips the recorder drain and the final decode.
+     */
+    @Synchronized
+    private fun remainingAudioIsSilent(): Boolean {
+        if (decodedSegments.isEmpty() || backend is StreamingSpeechBackend) return false
+        val start = segmentStart
+        val end = capturedSampleCount()
+        val referenceStart = maxOf(0, start - LIVE_TEXT_ANALYSIS_SAMPLES)
+        return PauseChunker.isSilentTail(copyCapturedSamples(referenceStart, start), copyCapturedSamples(start, end))
+    }
+
     @Synchronized
     private fun cancelCapture() {
         stopReason = StopReason.Cancel
@@ -1345,7 +1358,10 @@ abstract class RecordingSession {
                         val reason = stopReason
                         if(reason != null && reason != StopReason.Cancel && reason != StopReason.CaptureFailed &&
                             activeRecorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                            drainRecorderTail(activeRecorder, reason, samples, captureGeneration)
+                            // Live text already shows every word: the drain would only add silence.
+                            if (reason != StopReason.Manual || !remainingAudioIsSilent()) {
+                                drainRecorderTail(activeRecorder, reason, samples, captureGeneration)
+                            }
                             appendFinalSilence(captureGeneration)
                         }
                     } catch (error: CancellationException) {
@@ -1368,7 +1384,8 @@ abstract class RecordingSession {
                             configuration = DiagnosticConfiguration(vadEnabled = shouldUseVad, durationLimitEnabled = !canExpandSpace))
                         }
                         try {
-                            capture?.finishWriting()
+                            // A session that goes on to decoding closes (and syncs) the file after
+                            // delivery, so the sync does not delay the text.
                             if (stopReason == null || stopReason == StopReason.Cancel ||
                                 captureGeneration != recognitionGeneration) capture?.close()
                         } catch (error: Exception) {
@@ -1676,7 +1693,8 @@ abstract class RecordingSession {
                         Log.e("AudioRecognizer", "Whole-recording decode failed (${DiagnosticFailure.from(error).kind})")
                     }
                 }
-                if (rest.isEmpty()) "" else runBackend.transcribe(rest)
+                // Everything spoken is already shown as live text: deliver it without decoding silence.
+                if (rest.isEmpty() || remainingAudioIsSilent()) "" else runBackend.transcribe(rest)
             }
             decodeRest
         }
