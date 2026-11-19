@@ -158,14 +158,24 @@ cadence, keyboard behavior, sustained heat and battery use require that check.
 
 ## Editing buttons while dictating
 
-Model Options has an **Editing buttons while dictating** setting, off by default. It needs **Live text at pauses** and one of the offline Parakeet models: TDT V3, Orukeet, Ultra or the Slovak model. With SK | EN routing, both routed models must be among them. The keyboard dictation screen then shows five buttons in two equal columns plus a tall one: "Aa→a" over space, delete one character over ".", and delete one word. The SK | EN switch moves to a column on the left, and the highlighted delete-word button sits at the right edge. They work while recording and while the final text is being decoded. Holding delete or space repeats it.
+Model Options has an **Editing buttons while dictating** setting, off by default. It needs **Live text at pauses** and one of the offline Parakeet models: TDT V3, Orukeet, Ultra or the Slovak model. With SK | EN routing, both routed models must be among them. The keyboard dictation screen then shows two equal columns of buttons, a tall delete-word button and a slim, tall ABC button: "Aa→a" over space, delete one character over ".", then delete one word, then ABC at the right edge. The SK | EN switch moves to a column on the left. They work while recording and while the final text is being decoded. Holding delete or space repeats it.
 
 - A tap makes the text recognized so far permanent, then edits the text before the cursor. Later speech is added after it. Because the live-text pieces never change, the permanent text is never sent again or duplicated.
 - Delete one character removes one visible character, including emoji with skin tones, ZWJ sequences and flags. Delete one word removes the word with its punctuation and the spaces before it. A line break directly before the cursor is removed on its own.
 - "Aa→a" makes the nearest capitalized word before the cursor start with a small letter, at any distance. Each tap moves one word further back. It skips all-caps and mixed words such as "USA" or "iPhone", and "I". An apostrophe or hyphen keeps a word together, so names like "O'Brien" or "Jean-Luc" are skipped whole, while "Don't" becomes "don't". It changes only that letter, not a period before it.
 - "." replaces spaces before the cursor and one trailing "." or ",", so `That is all,` becomes `That is all.` and a period is never doubled.
 - Transcript cleanup (S1 and Harper) is off for these dictations, because it would rewrite text that is already permanent. Personal vocabulary still applies.
+- ABC opens a QWERTY letter keyboard while dictation keeps running. Letters are typed at the cursor like the other buttons, so the live text is kept and later speech goes in after them. Shift makes the next letter capital; a second tap locks capitals. Long-press a letter for its Slovak and Czech accented forms, then slide and release to pick one. Long-pressing a top-row key offers its digit first (q is 1 through p is 0). The bottom row has back to the dictation buttons, cursor arrows that move one character, space and delete word. While the letter keys are open, silence does not stop the recording and tapping the screen does not stop it either; the Stop button still does.
 - The buttons are hidden for streaming models such as Nemotron, whose earlier words can still change. They are also hidden when another app opens the voice input screen directly, because there is no text field to edit.
+
+## Live text at pauses
+
+**Live text at pauses** in Model Options works with the offline Parakeet models: TDT V3, Orukeet, Ultra and the Slovak model. While you speak, each part that ends in a pause of about half a second is transcribed and shown, so after Stop only the last part is left. Without a pause, a part is cut after 15 seconds. Each part is transcribed on its own, so words across a pause can come out slightly differently.
+
+- If everything you said is already shown when you press Stop, the text is delivered at once and the keyboard closes without waiting. The app checks that the audio after the last shown part holds no speech. If it holds speech, or the app cannot tell speech from the background, that part is transcribed first, as before.
+- **Retranscribe the whole recording at the end** transcribes the whole recording again in one piece after Stop and replaces the live parts. The final text takes longer. It is not used after an SK | EN switch or with editing buttons.
+- **Keep two models loaded** keeps both the Slovak model and your selected Parakeet model in memory with the SK | EN button, so switching language is instant. It needs about 1.5 to 2 GB of free memory.
+- **Latin letters only**, on by default, applies to the Parakeet models. Parakeet Ultra and the Slovak model sometimes write a few English words in Cyrillic letters, such as "стопс" for "stops". This setting spells them in Latin letters, with Slovak letters (č, š, ž) for the Slovak model. Turn it off if you dictate Russian, Ukrainian or Bulgarian.
 
 ## Model downloads
 

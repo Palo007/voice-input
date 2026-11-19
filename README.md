@@ -19,7 +19,7 @@ Current version: **1.5.2**. Get the APK from the
 - Model Options lists downloaded models first in each model family.
 
 **Keyboard dictation screen**
-- Editing buttons while dictating: delete character, delete word, "?" and space.
+- Editing buttons while dictating: delete character, delete word, "." and space.
 - A lowercase (Aa→a) button that keeps names with apostrophes and hyphens together.
 - Voice commands (new line, new paragraph, comma, period, question and exclamation
   marks, colon, and optional "delete that" / "undo dictation") in English and Slovak.
@@ -28,11 +28,25 @@ Current version: **1.5.2**. Get the APK from the
   while recording (1.5.2).
 - Editing bar rearranged beside the SK and EN buttons (1.5.1).
 
+**Since 1.5.2 (not yet released)**
+- Letter keys while dictating: an ABC button opens a QWERTY keyboard with shift,
+  Slovak and Czech accents and digits on long-press, and cursor arrows. Dictation keeps running.
+- The "?" button is replaced by a "." button that does not double a period. The editing
+  buttons are laid out in two equal columns.
+- When live text already shows everything you said, Stop delivers it at once and the
+  keyboard closes without waiting.
+- Live text at pauses no longer stalls on a short phrase between long silences.
+- **Latin letters only** (on by default): Parakeet Ultra and the Slovak model no longer
+  write English words in Cyrillic letters.
+
 **History and appearance**
 - Whole-recording retranscribe, and playback of saved recordings in history.
 - Custom theme colors.
 
 **Documentation**
+- [Live text at pauses and editing buttons](docs/model-guide.md#live-text-at-pauses) in the
+  model guide, and Slovak and English routing, voice commands and themes in the
+  [user guide](docs/user-guide.md).
 - A [recognition troubleshooting guide](docs/recognition-troubleshooting.md) with an
   on-phone replay bench, [issue #52 notes](docs/ISSUE-52-ideas.md), and
   [Android on-device build notes](docs/ANDROID_DEV_SETUP.md).

@@ -94,6 +94,38 @@ normally keeps your last choice. To check what your keyboard shares, open
 **Settings > Support > Diagnostics** after a dictation and read
 **Last keyboard language check**.
 
+## Keyboard dictation screen
+
+These options are in **Model Options** and work with the offline Parakeet
+models (TDT V3, Orukeet, Ultra and the Slovak model):
+
+- **Live text at pauses** shows text at each pause while you speak. If
+  everything is already shown when you press Stop, the keyboard closes at once.
+- **Editing buttons while dictating** adds buttons to delete a character or a
+  word, type a period or a space, make the last capital letter small, and an
+  ABC button for letter keys. Dictation keeps running while you edit, and it
+  also continues at the new cursor if you move the cursor or edit the field.
+
+The [model guide](model-guide.md#live-text-at-pauses) describes both in detail,
+together with **Retranscribe the whole recording at the end**, **Keep two
+models loaded** and **Latin letters only**.
+
+## Voice commands
+
+Open **Voice commands** in Settings to say punctuation and line breaks, such
+as "comma", "period", "question mark" or "new line", in English or in Slovak
+(with SK | EN set to SK). **Delete commands** adds "delete that" and "undo
+dictation". Commands work only in the keyboard. Formatting adapts to the field:
+new lines go only into multi-line fields, and email, web address, number and
+phone fields get no commands. Audio history keeps the words as spoken. See the
+[voice command spec](specs/voice-commands-field-formatting.md) for the full
+phrase table.
+
+## Theme
+
+**Settings > Theme > Custom colors** lets you pick one of 16 accent colors and a
+brightness: follow system, light, dark, or black (AMOLED). Changes apply at once.
+
 ## Personal dictionary and cleanup
 
 Use **Personal Dictionary** for predictable corrections, such as `heard phrase => preferred phrase`. Bulk paste and UTF-8 imports up to 1 MiB let you preview additions, skip duplicates, and fix invalid mappings. These are text corrections; they do not train Orukeet or supply it with recognition hints. The optional [Arabic transliteration example](examples/arabic-transliteration.txt) is an editable starting point, not enabled automatically.
@@ -108,7 +140,7 @@ The first cleanup run benchmarks CPU configurations and experimental OpenCL. Aut
 
 Open **Audio history** to find recordings by transcript preview, view and copy full text, or retranscribe with the current model, language, dictionary, and cleanup settings. Keep the history screen open while retranscription runs.
 
-Each recording has direct Retranscribe, Copy text, and Delete controls. **Show full transcript** appears when the preview is cut off; Copy text always copies the complete saved transcript.
+Each recording has direct Play, Retranscribe, Copy text, and Delete controls. Play turns into Stop while the recording plays. **Show full transcript** appears when the preview is cut off; Copy text always copies the complete saved transcript.
 
 Recording backups are on by default with 24-hour retention, adjustable from 1 to 720 hours. Saved audio includes canceled and failed attempts so it can be recovered. Storage failures show a warning without blocking ordinary dictation. Audio uses about 1.9 MB per minute in private storage excluded from Android backup.
 
