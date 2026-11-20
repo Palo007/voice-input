@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,6 +61,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.floor
@@ -112,12 +113,14 @@ internal object LetterKeyboardLayout {
 
 /** The long-press option row shown over the keyboard; [anchor] is the key, in keyboard coordinates. */
 @Stable
-private class AccentPopup(val anchor: Rect, val options: List<String>, val leftward: Boolean, val below: Boolean) {
+private class AccentPopup(val anchor: Rect, val options: List<String>, val leftward: Boolean) {
     var selected by mutableIntStateOf(0)
 }
 
 /** Height of one key row, including the gap around each key. */
 private val ROW_HEIGHT = 48.dp
+/** Gap between a key and its long-press options, in key heights; the finger covers less than this. */
+private const val ACCENT_ROW_LIFT = 1f
 /** Inset of the visible key inside its touch area, so neighboring keys leave no dead gaps. */
 private val KEY_INSET = 2.dp
 
@@ -152,12 +155,34 @@ fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() } }
             .testTag("dictation-letter-keyboard")
     ) {
+        @Composable
+        fun RowScope.Letters(index: Int) {
+            LetterKeyboardLayout.rows[index].forEach { letter ->
+                LetterKey(letter, shift, onPressDown = ::tap, onType = ::type,
+                    showAccents = { coords, options ->
+                        val rootCoords = root[0]
+                        if (rootCoords == null || !rootCoords.isAttached || !coords.isAttached) null
+                        else {
+                            val anchor = rootCoords.localBoundingBoxOf(coords)
+                            AccentPopup(anchor, options.map(shift::apply),
+                                leftward = anchor.center.x > rootCoords.size.width / 2f).also { popup = it }
+                        }
+                    },
+                    hideAccents = { popup = null })
+            }
+        }
         Column(Modifier.fillMaxWidth()) {
-            LetterKeyboardLayout.rows.forEachIndexed { index, letters ->
-                Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
-                    when (index) {
-                        1 -> Spacer(Modifier.weight(0.5f))
-                        2 -> ActionKey("shift", stringResource(R.string.dictation_letters_shift), weight = 1.5f,
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) { Letters(0) }
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                Spacer(Modifier.weight(0.5f))
+                Letters(1)
+                Spacer(Modifier.weight(0.5f))
+            }
+            // The last two rows share a tall key on the right that returns to the editing buttons.
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT * 2)) {
+                Column(Modifier.weight(8.5f)) {
+                    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                        ActionKey("shift", stringResource(R.string.dictation_letters_shift), weight = 1.5f,
                             highlighted = shift != LetterShift.Off, onPress = { tap(); shift = shift.next() },
                             state = stringResource(when (shift) {
                                 LetterShift.Off -> R.string.dictation_letters_shift_off
@@ -170,48 +195,32 @@ fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit
                                 LetterShift.Locked -> R.drawable.ic_shift_locked
                             }), contentDescription = null, modifier = Modifier.size(22.dp))
                         }
+                        Letters(2)
                     }
-                    letters.forEach { letter ->
-                        LetterKey(letter, shift, onPressDown = ::tap, onType = ::type,
-                            showAccents = { coords, options ->
-                                val rootCoords = root[0]
-                                if (rootCoords == null || !rootCoords.isAttached || !coords.isAttached) null
-                                else {
-                                    val anchor = rootCoords.localBoundingBoxOf(coords)
-                                    // The top row opens below the key, clear of the Stop and close buttons.
-                                    AccentPopup(anchor, options.map(shift::apply),
-                                        leftward = anchor.center.x > rootCoords.size.width / 2f,
-                                        below = index == 0).also { popup = it }
-                                }
-                            },
-                            hideAccents = { popup = null })
-                    }
-                    when (index) {
-                        1 -> Spacer(Modifier.weight(0.5f))
-                        2 -> ActionKey("delete", stringResource(R.string.dictation_edit_delete_character), weight = 1.5f,
+                    // Space at the left edge, the erase keys beside it, then the cursor keys together.
+                    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                        ActionKey("space", stringResource(R.string.dictation_edit_space), weight = 3f, repeats = true,
+                            onPress = { edit(DictationEdit.Space) }) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
+                        ActionKey("delete", stringResource(R.string.dictation_edit_delete_character), weight = 1.25f,
                             repeats = true, onPress = { edit(DictationEdit.DeleteCharacter) }) { BackspaceIcon(20) }
+                        ActionKey("word", stringResource(R.string.dictation_edit_delete_word), weight = 1.25f,
+                            prominent = true, repeats = true, onPress = { edit(DictationEdit.DeleteWord) }) { BackspaceIcon(22) }
+                        ActionKey("left", stringResource(R.string.dictation_letters_cursor_left), repeats = true,
+                            onPress = { edit(DictationEdit.MoveCursor(forward = false)) }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
+                        }
+                        ActionKey("right", stringResource(R.string.dictation_letters_cursor_right), repeats = true,
+                            onPress = { edit(DictationEdit.MoveCursor(forward = true)) }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                        }
+                        ActionKey("period", stringResource(R.string.dictation_edit_period),
+                            onPress = { edit(DictationEdit.Period) }) { EditLabel(".") }
                     }
                 }
-            }
-            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
                 ActionKey("close", stringResource(R.string.dictation_letters_close), weight = 1.5f, highlighted = true,
                     onPress = { tap(); onClose() }) {
                     Icon(painterResource(R.drawable.mic_2_), contentDescription = null, modifier = Modifier.size(22.dp))
                 }
-                ActionKey("left", stringResource(R.string.dictation_letters_cursor_left), repeats = true,
-                    onPress = { edit(DictationEdit.MoveCursor(forward = false)) }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
-                }
-                ActionKey("space", stringResource(R.string.dictation_edit_space), weight = 4f, repeats = true,
-                    onPress = { edit(DictationEdit.Space) }) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
-                ActionKey("right", stringResource(R.string.dictation_letters_cursor_right), repeats = true,
-                    onPress = { edit(DictationEdit.MoveCursor(forward = true)) }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                }
-                ActionKey("period", stringResource(R.string.dictation_edit_period),
-                    onPress = { edit(DictationEdit.Period) }) { EditLabel(".") }
-                ActionKey("word", stringResource(R.string.dictation_edit_delete_word), weight = 1.5f, prominent = true,
-                    repeats = true, onPress = { edit(DictationEdit.DeleteWord) }) { BackspaceIcon(22) }
             }
         }
         popup?.let { AccentRow(it) }
@@ -336,36 +345,43 @@ private suspend fun AwaitPointerEventScope.awaitRelease(id: PointerId): Boolean 
     }
 }
 
-/** The long-press options above (top row: below) their key, each as wide as the key; the selected one is highlighted. */
+/**
+ * The long-press options, each as wide as the key; the selected one is highlighted. They float a
+ * full key height above their key, every row included, so the pressing finger never covers them. A
+ * separate popup window lets them reach past the dictation screen's scrolling area, which clips.
+ */
 @Composable
 private fun AccentRow(popup: AccentPopup) {
     val density = LocalDensity.current
     val keyWidth = popup.anchor.width
+    val keyHeight = popup.anchor.height
     val count = popup.options.size
     val left = if (popup.leftward) popup.anchor.right - keyWidth * count else popup.anchor.left
-    val top = if (popup.below) popup.anchor.bottom else popup.anchor.top - popup.anchor.height
+    val top = popup.anchor.top - keyHeight - keyHeight * ACCENT_ROW_LIFT
     val shape = RoundedCornerShape(10.dp)
-    Row(
-        Modifier
-            .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-            .clearAndSetSemantics { }
-    ) {
-        // Leftward rows list the first option at the right end, over the key.
-        val order = if (popup.leftward) popup.options.indices.reversed() else popup.options.indices
-        for (i in order) {
-            val selected = i == popup.selected
-            Box(
-                Modifier
-                    .width(with(density) { keyWidth.toDp() })
-                    .height(with(density) { popup.anchor.height.toDp() })
-                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(popup.options[i], fontSize = 22.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+    Popup(offset = IntOffset(left.roundToInt(), top.roundToInt()),
+        properties = PopupProperties(focusable = false, dismissOnBackPress = false, dismissOnClickOutside = false)) {
+        Row(
+            Modifier
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                .clearAndSetSemantics { }
+        ) {
+            // Leftward rows list the first option at the right end, in line with the key.
+            val order = if (popup.leftward) popup.options.indices.reversed() else popup.options.indices
+            for (i in order) {
+                val selected = i == popup.selected
+                Box(
+                    Modifier
+                        .width(with(density) { keyWidth.toDp() })
+                        .height(with(density) { popup.anchor.height.toDp() })
+                        .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(popup.options[i], fontSize = 22.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                }
             }
         }
     }
