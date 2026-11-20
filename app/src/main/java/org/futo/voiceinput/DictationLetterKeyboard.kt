@@ -155,12 +155,34 @@ fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() } }
             .testTag("dictation-letter-keyboard")
     ) {
+        @Composable
+        fun RowScope.Letters(index: Int) {
+            LetterKeyboardLayout.rows[index].forEach { letter ->
+                LetterKey(letter, shift, onPressDown = ::tap, onType = ::type,
+                    showAccents = { coords, options ->
+                        val rootCoords = root[0]
+                        if (rootCoords == null || !rootCoords.isAttached || !coords.isAttached) null
+                        else {
+                            val anchor = rootCoords.localBoundingBoxOf(coords)
+                            AccentPopup(anchor, options.map(shift::apply),
+                                leftward = anchor.center.x > rootCoords.size.width / 2f).also { popup = it }
+                        }
+                    },
+                    hideAccents = { popup = null })
+            }
+        }
         Column(Modifier.fillMaxWidth()) {
-            LetterKeyboardLayout.rows.forEachIndexed { index, letters ->
-                Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
-                    when (index) {
-                        1 -> Spacer(Modifier.weight(0.5f))
-                        2 -> ActionKey("shift", stringResource(R.string.dictation_letters_shift), weight = 1.5f,
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) { Letters(0) }
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                Spacer(Modifier.weight(0.5f))
+                Letters(1)
+                Spacer(Modifier.weight(0.5f))
+            }
+            // The last two rows share a tall key on the right that returns to the editing buttons.
+            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT * 2)) {
+                Column(Modifier.weight(8.5f)) {
+                    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                        ActionKey("shift", stringResource(R.string.dictation_letters_shift), weight = 1.5f,
                             highlighted = shift != LetterShift.Off, onPress = { tap(); shift = shift.next() },
                             state = stringResource(when (shift) {
                                 LetterShift.Off -> R.string.dictation_letters_shift_off
@@ -173,46 +195,32 @@ fun DictationLetterKeyboard(onEdit: (DictationEdit) -> Unit, onClose: () -> Unit
                                 LetterShift.Locked -> R.drawable.ic_shift_locked
                             }), contentDescription = null, modifier = Modifier.size(22.dp))
                         }
+                        Letters(2)
                     }
-                    letters.forEach { letter ->
-                        LetterKey(letter, shift, onPressDown = ::tap, onType = ::type,
-                            showAccents = { coords, options ->
-                                val rootCoords = root[0]
-                                if (rootCoords == null || !rootCoords.isAttached || !coords.isAttached) null
-                                else {
-                                    val anchor = rootCoords.localBoundingBoxOf(coords)
-                                    AccentPopup(anchor, options.map(shift::apply),
-                                        leftward = anchor.center.x > rootCoords.size.width / 2f).also { popup = it }
-                                }
-                            },
-                            hideAccents = { popup = null })
-                    }
-                    when (index) {
-                        1 -> Spacer(Modifier.weight(0.5f))
-                        2 -> ActionKey("delete", stringResource(R.string.dictation_edit_delete_character), weight = 1.5f,
+                    // Space at the left edge, the erase keys beside it, then the cursor keys together.
+                    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
+                        ActionKey("space", stringResource(R.string.dictation_edit_space), weight = 3f, repeats = true,
+                            onPress = { edit(DictationEdit.Space) }) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
+                        ActionKey("delete", stringResource(R.string.dictation_edit_delete_character), weight = 1.25f,
                             repeats = true, onPress = { edit(DictationEdit.DeleteCharacter) }) { BackspaceIcon(20) }
+                        ActionKey("word", stringResource(R.string.dictation_edit_delete_word), weight = 1.25f,
+                            prominent = true, repeats = true, onPress = { edit(DictationEdit.DeleteWord) }) { BackspaceIcon(22) }
+                        ActionKey("left", stringResource(R.string.dictation_letters_cursor_left), repeats = true,
+                            onPress = { edit(DictationEdit.MoveCursor(forward = false)) }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
+                        }
+                        ActionKey("right", stringResource(R.string.dictation_letters_cursor_right), repeats = true,
+                            onPress = { edit(DictationEdit.MoveCursor(forward = true)) }) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                        }
+                        ActionKey("period", stringResource(R.string.dictation_edit_period),
+                            onPress = { edit(DictationEdit.Period) }) { EditLabel(".") }
                     }
                 }
-            }
-            Row(Modifier.fillMaxWidth().height(ROW_HEIGHT)) {
                 ActionKey("close", stringResource(R.string.dictation_letters_close), weight = 1.5f, highlighted = true,
                     onPress = { tap(); onClose() }) {
                     Icon(painterResource(R.drawable.mic_2_), contentDescription = null, modifier = Modifier.size(22.dp))
                 }
-                ActionKey("left", stringResource(R.string.dictation_letters_cursor_left), repeats = true,
-                    onPress = { edit(DictationEdit.MoveCursor(forward = false)) }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
-                }
-                ActionKey("space", stringResource(R.string.dictation_edit_space), weight = 4f, repeats = true,
-                    onPress = { edit(DictationEdit.Space) }) { EditLabel(stringResource(R.string.dictation_edit_space_short)) }
-                ActionKey("right", stringResource(R.string.dictation_letters_cursor_right), repeats = true,
-                    onPress = { edit(DictationEdit.MoveCursor(forward = true)) }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                }
-                ActionKey("period", stringResource(R.string.dictation_edit_period),
-                    onPress = { edit(DictationEdit.Period) }) { EditLabel(".") }
-                ActionKey("word", stringResource(R.string.dictation_edit_delete_word), weight = 1.5f, prominent = true,
-                    repeats = true, onPress = { edit(DictationEdit.DeleteWord) }) { BackspaceIcon(22) }
             }
         }
         popup?.let { AccentRow(it) }
